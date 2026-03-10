@@ -22,16 +22,22 @@ $stats = [
 try {
     // Changed from site_members to the Asiko users table
     $stats['members'] = $pdo->query("SELECT COUNT(*) FROM users WHERE email IS NOT NULL AND email != ''")->fetchColumn();
-} catch (PDOException $e) {}
+} catch (PDOException $e) {
+    error_log("Mailing Dashboard Stats Error (Users): " . $e->getMessage());
+}
 
 try {
     $stats['subscribers'] = $pdo->query("SELECT COUNT(*) FROM mail_subscribers WHERE status = 'active'")->fetchColumn();
-} catch (PDOException $e) {}
+} catch (PDOException $e) {
+    error_log("Mailing Dashboard Stats Error (Subscribers): " . $e->getMessage());
+}
 
 try {
     $stats['total_campaigns'] = $pdo->query("SELECT COUNT(*) FROM mail_campaigns")->fetchColumn();
     $stats['total_emails_sent'] = $pdo->query("SELECT SUM(recipients_count) FROM mail_campaigns")->fetchColumn() ?: 0;
-} catch (PDOException $e) {}
+} catch (PDOException $e) {
+    error_log("Mailing Dashboard Stats Error (Campaigns): " . $e->getMessage());
+}
 
 $total_audience = $stats['members'] + $stats['subscribers'];
 
@@ -39,7 +45,9 @@ $total_audience = $stats['members'] + $stats['subscribers'];
 $recent_campaigns = [];
 try {
     $recent_campaigns = $pdo->query("SELECT * FROM mail_campaigns ORDER BY sent_at DESC LIMIT 5")->fetchAll(PDO::FETCH_ASSOC);
-} catch (PDOException $e) {}
+} catch (PDOException $e) {
+    error_log("Mailing Dashboard Recent Campaigns Error: " . $e->getMessage());
+}
 
 ?>
 <!DOCTYPE html>

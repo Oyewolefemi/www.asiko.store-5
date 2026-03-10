@@ -1,0 +1,6 @@
+# Disable script execution in the assets directory
+Options -ExecCGI
+<FilesMatch "\.(php|php3|php4|phtml|pl|py|jsp|asp|htm|shtml|sh|cgi)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>

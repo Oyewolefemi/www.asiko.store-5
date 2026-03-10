@@ -146,7 +146,11 @@ if ($mail_status === 'success') {
 function replacePlaceholders(string $template, array $data): string {
     foreach ($data as $key => $value) {
         if (is_string($value) || is_numeric($value)) {
-            $template = str_replace('{{' . $key . '}}', htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8'), $template);
+            // Check if key ends in _raw to skip escaping (useful for tables or lists)
+            $isRaw = (substr($key, -4) === '_raw');
+            $content = $isRaw ? (string)$value : htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+            
+            $template = str_replace('{{' . $key . '}}', $content, $template);
         }
     }
     // Remove any unreplaced placeholders so they don't show in the email

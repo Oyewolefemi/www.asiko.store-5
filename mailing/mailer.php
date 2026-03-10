@@ -43,7 +43,7 @@ if (file_exists(__DIR__ . '/vendor/autoload.php')) {
 $smtp_host = '';
 $smtp_user = '';
 $smtp_pass = '';
-$smtp_port = 587;
+$smtp_port = '';
 $smtp_from_name = '';
 
 // If $pdo exists (called from event.php), pull from DB settings first
@@ -57,19 +57,22 @@ if (isset($pdo)) {
         $smtp_host      = $db_settings['smtp_host']      ?? '';
         $smtp_user      = $db_settings['smtp_user']      ?? '';
         $smtp_pass      = $db_settings['smtp_pass']      ?? '';
-        $smtp_port      = (int)($db_settings['smtp_port'] ?? 587);
+        $smtp_port      = $db_settings['smtp_port']      ?? '';
         $smtp_from_name = $db_settings['smtp_from_name'] ?? '';
     } catch (Exception $e) {
-        // DB read failed — fall through to .env
+        error_log("Mailing Settings DB Retrieval Failed: " . $e->getMessage());
     }
 }
 
 // Fall back to .env if DB settings are empty
-if (empty($smtp_host)) $smtp_host      = $_ENV['SMTP_HOST']      ?? '';
-if (empty($smtp_user)) $smtp_user      = $_ENV['SMTP_USER']      ?? '';
-if (empty($smtp_pass)) $smtp_pass      = $_ENV['SMTP_PASS']      ?? '';
-if (empty($smtp_port)) $smtp_port      = (int)($_ENV['SMTP_PORT'] ?? 587);
+if (empty($smtp_host))      $smtp_host      = $_ENV['SMTP_HOST']      ?? '';
+if (empty($smtp_user))      $smtp_user      = $_ENV['SMTP_USER']      ?? '';
+if (empty($smtp_pass))      $smtp_pass      = $_ENV['SMTP_PASS']      ?? '';
+if (empty($smtp_port))      $smtp_port      = $_ENV['SMTP_PORT']      ?? 587;
 if (empty($smtp_from_name)) $smtp_from_name = $_ENV['SMTP_FROM_NAME'] ?? 'Mailing System';
+
+// Explicitly cast port to integer for PHPMailer compatibility
+$smtp_port = (int)$smtp_port;
 
 if (empty($smtp_host) || empty($smtp_user) || empty($smtp_pass)) {
     $mail_status = 'failed';
