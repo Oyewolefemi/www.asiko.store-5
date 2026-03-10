@@ -1,92 +1,107 @@
 <?php
 // mailing/mailer.php
-// The Universal PHPMailer Engine
+// ============================================================
+// PHPMailer engine. Called by event.php (and can be called
+// directly for manual broadcasts from compose.php).
+//
+// EXPECTS these variables to already be set before require:
+//   $recipient_email  (string)  e.g. 'john@example.com'
+//   $recipient_name   (string)  e.g. 'John Doe'
+//   $subject          (string)  e.g. 'Order #42 Confirmed'
+//   $body             (string)  Full HTML email body
+//   $alt_body         (string)  Plain text fallback
+//
+// SETS after execution:
+//   $mail_status  ('success' | 'failed')
+//   $mail_error   (string | null)
+// ============================================================
 
-// Security: Prevent direct URL access to this engine file
-if (basename($_SERVER['PHP_SELF']) === basename(__FILE__)) {
-    die('Security Error: Direct access to the mailer engine is not permitted.');
+// Don't run standalone
+if (!defined('API_MAIL_CALL') && !defined('COMPOSE_MAIL_CALL')) {
+    die("Direct access not allowed.");
 }
-
-require_once __DIR__ . '/PHPMailer/src/Exception.php';
-require_once __DIR__ . '/PHPMailer/src/PHPMailer.php';
-require_once __DIR__ . '/PHPMailer/src/SMTP.php';
 
 use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\SMTP;
 use PHPMailer\PHPMailer\Exception;
 
-$mail_status = 'failed';
-$mail_error = 'Unknown error';
-
-// 1. Ensure required data has been passed from the API listener or Parent Script
-if (empty($recipient_email) || empty($subject) || empty($body)) {
-    $mail_error = 'Critical Error: Missing recipient, subject, or body in mailer engine.';
-    return; // Stop execution, return failure to the parent script
+// Support both Composer autoload and manual drop-in
+if (file_exists(__DIR__ . '/vendor/autoload.php')) {
+    require_once __DIR__ . '/vendor/autoload.php';
+} elseif (file_exists(__DIR__ . '/PHPMailer/src/PHPMailer.php')) {
+    require_once __DIR__ . '/PHPMailer/src/Exception.php';
+    require_once __DIR__ . '/PHPMailer/src/PHPMailer.php';
+    require_once __DIR__ . '/PHPMailer/src/SMTP.php';
+} else {
+    $mail_status = 'failed';
+    $mail_error  = 'PHPMailer not found. Run: composer require phpmailer/phpmailer OR drop PHPMailer/src/ into mailing/.';
+    error_log($mail_error);
+    return;
 }
 
-// 2. Load Master .env configuration (if not already loaded by the parent script)
-if (empty($_ENV['SMTP_HOST'])) {
-    $envPath = __DIR__ . '/../.env';
-    if (file_exists($envPath)) {
-        $lines = file($envPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-        foreach ($lines as $line) {
-            if (strpos(trim($line), '#') === 0 || strpos($line, '=') === false) continue;
-            list($name, $value) = explode('=', $line, 2);
-            $_ENV[trim($name)] = trim(trim($value), "\"'");
+// Pull SMTP config from DB (mail_settings) or fall back to .env
+$smtp_host = '';
+$smtp_user = '';
+$smtp_pass = '';
+$smtp_port = 587;
+$smtp_from_name = '';
+
+// If $pdo exists (called from event.php), pull from DB settings first
+if (isset($pdo)) {
+    try {
+        $settings_stmt = $pdo->query("SELECT setting_key, setting_value FROM mail_settings");
+        $db_settings   = [];
+        while ($row = $settings_stmt->fetch()) {
+            $db_settings[$row['setting_key']] = $row['setting_value'];
         }
-    } else {
-        $mail_error = 'Configuration Error: Master .env file missing.';
-        return;
+        $smtp_host      = $db_settings['smtp_host']      ?? '';
+        $smtp_user      = $db_settings['smtp_user']      ?? '';
+        $smtp_pass      = $db_settings['smtp_pass']      ?? '';
+        $smtp_port      = (int)($db_settings['smtp_port'] ?? 587);
+        $smtp_from_name = $db_settings['smtp_from_name'] ?? '';
+    } catch (Exception $e) {
+        // DB read failed — fall through to .env
     }
 }
 
-// 3. Fire up PHPMailer
+// Fall back to .env if DB settings are empty
+if (empty($smtp_host)) $smtp_host      = $_ENV['SMTP_HOST']      ?? '';
+if (empty($smtp_user)) $smtp_user      = $_ENV['SMTP_USER']      ?? '';
+if (empty($smtp_pass)) $smtp_pass      = $_ENV['SMTP_PASS']      ?? '';
+if (empty($smtp_port)) $smtp_port      = (int)($_ENV['SMTP_PORT'] ?? 587);
+if (empty($smtp_from_name)) $smtp_from_name = $_ENV['SMTP_FROM_NAME'] ?? 'Mailing System';
+
+if (empty($smtp_host) || empty($smtp_user) || empty($smtp_pass)) {
+    $mail_status = 'failed';
+    $mail_error  = 'SMTP credentials not configured. Check mail_settings table or .env file.';
+    error_log($mail_error);
+    return;
+}
+
+// Send
 $mail = new PHPMailer(true);
-
 try {
-    // Server settings
     $mail->isSMTP();
-    $mail->Host       = $_ENV['SMTP_HOST'] ?? '';
-    $mail->SMTPAuth   = true;
-    $mail->Username   = $_ENV['SMTP_USER'] ?? '';
-    $mail->Password   = $_ENV['SMTP_PASS'] ?? '';
-    $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-    $mail->Port       = $_ENV['SMTP_PORT'] ?? 587;
+    $mail->Host        = $smtp_host;
+    $mail->SMTPAuth    = true;
+    $mail->Username    = $smtp_user;
+    $mail->Password    = $smtp_pass;
+    $mail->SMTPSecure  = $smtp_port === 465 ? PHPMailer::ENCRYPTION_SMTPS : PHPMailer::ENCRYPTION_STARTTLS;
+    $mail->Port        = $smtp_port;
 
-    // From Header
-    $fromEmail = $_ENV['SMTP_FROM_EMAIL'] ?? 'no-reply@asiko.store';
-    $fromName  = $_ENV['SMTP_FROM_NAME'] ?? 'Asiko Store';
-    $mail->setFrom($fromEmail, $fromName);
-
-    // Add Recipients (Handles both multiple recipients array or a single string)
-    if (is_array($recipient_email)) {
-        foreach ($recipient_email as $email) {
-            if (!empty($email)) $mail->addAddress(trim($email));
-        }
-    } else {
-        $r_name = !empty($recipient_name) ? trim($recipient_name) : '';
-        $mail->addAddress(trim($recipient_email), $r_name);
-    }
-
-    // Content Settings
+    $mail->setFrom($smtp_user, $smtp_from_name);
+    $mail->addAddress($recipient_email, $recipient_name);
     $mail->isHTML(true);
     $mail->Subject = $subject;
     $mail->Body    = $body;
-    
-    // Auto-generate plain text fallback if one wasn't provided
-    $mail->AltBody = !empty($alt_body) ? $alt_body : strip_tags(str_replace('<br>', "\n", $body));
+    $mail->AltBody = $alt_body ?? strip_tags(str_replace('<br>', "\n", $body));
 
-    // Send!
     $mail->send();
     $mail_status = 'success';
     $mail_error  = null;
 
 } catch (Exception $e) {
     $mail_status = 'failed';
-    $mail_error  = "Mailer Error: {$mail->ErrorInfo}";
-    error_log("PHPMailer Exception: " . $mail_error);
-} catch (\Exception $e) {
-    $mail_status = 'failed';
-    $mail_error  = "General Error: " . $e->getMessage();
-    error_log("General Mail Exception: " . $mail_error);
+    $mail_error  = $mail->ErrorInfo;
+    error_log("Mailer error [{$recipient_email}]: {$mail_error}");
 }
-?>
