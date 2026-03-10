@@ -1,0 +1,260 @@
+/* Main Layout & Container */
+.hero {
+    background-color: var(--luxury-light-gray);
+    padding: 2rem 0;
+    text-align: center;
+    margin-bottom: 1.5rem;
+}
+.hero h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    color: var(--luxury-black);
+}
+.hero p {
+    color: var(--luxury-gray);
+    font-size: 1rem;
+}
+
+/* --- PRODUCT GRID (Responsive) --- */
+.products-grid {
+    display: grid;
+    /* DESKTOP: Smaller cards (min 160px) for denser display */
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 20px;
+    margin-bottom: 40px;
+}
+
+/* Card Styling */
+.card {
+    background: white;
+    border: 1px solid #f0f0f0;
+    border-radius: 8px;
+    overflow: hidden;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    position: relative;
+}
+
+.card:hover {
+    border-color: var(--primary-cyan);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+
+.card-link {
+    text-decoration: none;
+    color: inherit;
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+}
+
+/* Image Styling - Desktop Default */
+.card-img {
+    position: relative;
+    width: 100%;
+    padding-top: 100%; /* 1:1 Square Ratio */
+    background: #f9fafb;
+    overflow: hidden;
+}
+
+.card-img img {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain; /* Ensure whole product is seen */
+    padding: 10px;
+    transition: transform 0.3s ease;
+}
+
+.card:hover .card-img img {
+    transform: scale(1.05);
+}
+
+/* Content Styling */
+.card-body {
+    padding: 12px;
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.category {
+    font-size: 0.7rem;
+    color: #9ca3af;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+}
+
+.card-title {
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--luxury-black);
+    margin-bottom: 6px;
+    line-height: 1.3;
+    /* Limit to 2 lines */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.price {
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: var(--luxury-black);
+    margin-top: auto; /* Push to bottom of body */
+}
+
+/* Actions (Buttons) */
+.card-actions {
+    padding: 10px 12px;
+    background: white;
+    border-top: 1px solid #f9fafb;
+}
+
+/* Button adjustments */
+.btn-sm {
+    padding: 6px 12px;
+    font-size: 0.85rem;
+}
+.list-view-only {
+    display: none;
+}
+
+
+/* --- MOBILE VIEW (Walmart List Style) --- */
+@media (max-width: 767px) {
+    .products-grid {
+        /* Switch grid to a single column list */
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+
+    .card {
+        flex-direction: column; /* Wrapper still column, but content changes */
+        border: none;
+        border-bottom: 1px solid #e5e7eb;
+        border-radius: 0;
+        box-shadow: none;
+        padding-bottom: 12px;
+    }
+    .card:hover { transform: none; box-shadow: none; }
+
+    /* Make the link behave like a horizontal row */
+    .card-link {
+        flex-direction: row; /* Horizontal layout */
+        align-items: flex-start;
+        padding: 0 10px;
+    }
+
+    /* Image moves to the RIGHT (Order 2) */
+    .card-img {
+        order: 2;
+        width: 100px; /* Fixed small size */
+        height: 100px;
+        padding-top: 0; /* Remove aspect ratio hack */
+        flex-shrink: 0;
+        border-radius: 6px;
+        background: #f9fafb;
+        margin-left: 12px;
+    }
+    
+    .card-img img {
+        position: static; /* Normal flow */
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        padding: 4px;
+    }
+
+    /* Text stays on the LEFT (Order 1) */
+    .card-body {
+        order: 1;
+        padding: 4px 0;
+        width: 100%;
+    }
+
+    .card-title {
+        font-size: 1rem;
+        margin-bottom: 8px;
+        -webkit-line-clamp: 3; /* Allow more text on list view */
+    }
+
+    .price {
+        font-size: 1.2rem;
+        color: #b12704; /* Walmart-ish price color */
+    }
+    
+    /* Show extra details in list view */
+    .list-view-only {
+        display: block;
+    }
+
+    /* Actions positioned below the text block */
+    .card-actions {
+        border-top: none;
+        padding: 8px 10px 0 10px;
+        /* Align actions with the text on the left, under the info */
+        margin-right: 112px; /* Space for the image on the right */
+    }
+    
+    .btn-sm {
+        padding: 8px 16px; /* Larger touch targets */
+    }
+}
+
+/* Filter Section Styling */
+.filters {
+    background: #fff;
+    padding: 15px;
+    border-radius: 8px;
+    border: 1px solid #e5e7eb;
+}
+
+.filter-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+}
+
+.filter-input, .filter-select {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 0.9rem;
+}
+
+/* Pagination */
+.pagination {
+    display: flex;
+    justify-content: center;
+    gap: 5px;
+    margin-top: 30px;
+    flex-wrap: wrap;
+}
+.pagination a, .pagination span {
+    padding: 6px 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 4px;
+    text-decoration: none;
+    color: #333;
+}
+.pagination .current {
+    background: var(--primary-cyan);
+    color: white;
+    border-color: var(--primary-cyan);
+}
+.dots { padding: 6px; color: #999; }
+
+.empty-state {
+    text-align: center;
+    padding: 40px;
+    color: #666;
+}

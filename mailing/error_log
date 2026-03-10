@@ -1,0 +1,6 @@
+[27-Feb-2026 08:26:49 UTC] PHP Warning:  require_once(/home/ecovdron/public_html/includes/PHPMailer/Exception.php): Failed to open stream: No such file or directory in /home/ecovdron/public_html/includes/mailer.php on line 4
+[27-Feb-2026 08:26:49 UTC] PHP Fatal error:  Uncaught Error: Failed opening required '/home/ecovdron/public_html/includes/PHPMailer/Exception.php' (include_path='.:/opt/alt/php82/usr/share/pear:/opt/alt/php82/usr/share/php:/usr/share/pear:/usr/share/php') in /home/ecovdron/public_html/includes/mailer.php:4
+Stack trace:
+#0 /home/ecovdron/public_html/admin/mailing/compose.php(6): require_once()
+#1 {main}
+  thrown in /home/ecovdron/public_html/includes/mailer.php on line 4

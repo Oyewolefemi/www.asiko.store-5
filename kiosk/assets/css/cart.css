@@ -1,0 +1,171 @@
+/* General Cart Layout */
+.cart-items-container {
+    padding: 1rem 0;
+}
+
+.section-title {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 1.5rem;
+    color: var(--luxury-black);
+}
+
+/* --- Cart Item Styling (Amazon Style) --- */
+.cart-item {
+    display: flex;
+    align-items: flex-start; /* Align to the top */
+    padding: 1.5rem 0;
+    border-bottom: 1px solid var(--luxury-border);
+}
+
+/* Image Size Control (The Fix for 'Big') */
+.cart-item-image-wrapper {
+    flex-shrink: 0;
+    width: 100px; /* Max width for image container */
+    height: 100px; /* Max height for image container */
+    margin-right: 1.5rem;
+    border: 1px solid #f0f0f0;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.cart-item-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* Details and Pricing Area */
+.cart-item-details {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    padding-top: 0.25rem;
+}
+
+.cart-item-details h2 {
+    font-size: 1.1rem;
+    margin-bottom: 0.25rem;
+}
+
+.options-text {
+    margin-bottom: 0.5rem;
+}
+
+/* Block containing Quantity/Price/Remove */
+.item-quantity-price-block {
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+    margin-top: 1rem;
+}
+
+/* Quantity Controls */
+.cart-item-actions {
+    display: flex;
+    align-items: center;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    height: 32px;
+}
+
+.quantity-btn {
+    background: #f0f0f0;
+    border: none;
+    width: 32px;
+    height: 100%;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.1s;
+}
+
+.decrease-btn {
+    border-right: 1px solid #d1d5db;
+}
+
+.increase-btn {
+    border-left: 1px solid #d1d5db;
+}
+
+.quantity-input {
+    width: 40px;
+    height: 100%;
+    text-align: center;
+    border: none;
+    outline: none;
+    background: white;
+    font-size: 0.9rem;
+    padding: 0;
+    -moz-appearance: textfield; /* Remove arrows in Firefox */
+}
+.quantity-input::-webkit-outer-spin-button,
+.quantity-input::-webkit-inner-spin-button {
+    -webkit-appearance: none; /* Remove arrows in Chrome/Safari */
+    margin: 0;
+}
+
+/* Price and Remove Button */
+.price-remove-block {
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
+}
+
+.price-main {
+    font-size: 1.25rem;
+    color: #b12704; /* Amazon Red */
+    flex-shrink: 0;
+}
+
+.remove-btn {
+    background: none;
+    border: none;
+    color: var(--primary-cyan);
+    cursor: pointer;
+    font-size: 0.875rem;
+    text-decoration: underline;
+    padding: 0;
+}
+.remove-btn:hover {
+    color: var(--primary-cyan-hover);
+}
+
+/* Cart Summary */
+.cart-summary {
+    background: #f7f7f7;
+    padding: 1.5rem;
+    border-radius: 8px;
+    margin-top: 2rem;
+    text-align: right;
+    border: 1px solid #e0e0e0;
+}
+
+.cart-summary .text-2xl {
+    color: #b12704;
+    margin-bottom: 1rem;
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+    .cart-item {
+        flex-wrap: wrap;
+    }
+    .item-quantity-price-block {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.75rem;
+        width: 100%;
+        margin-left: 116px; /* Push below the image wrapper */
+        margin-top: -1.5rem; /* Pull up to align with details */
+    }
+    .price-remove-block {
+        justify-content: space-between;
+        width: 100%;
+    }
+    .cart-item-image-wrapper {
+        margin-right: 1rem;
+    }
+    .cart-item-details {
+        min-width: 0; /* Allows text to wrap */
+    }
+}

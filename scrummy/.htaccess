@@ -1,0 +1,12 @@
+# Disable directory browsing
+Options -Indexes
+
+# Block web access to .env files
+<FilesMatch "^\.env(.*)$">
+    Order allow,deny
+    Deny from all
+    Require all denied
+</FilesMatch>
+
+# Block access to git directories (Bonus security)
+<RedirectMatch 404 /\.git>

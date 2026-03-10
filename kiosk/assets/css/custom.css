@@ -1,0 +1,254 @@
+/*
+ * CONSOLIDATED KIOSK STYLESHEET - FIXED SPACING
+ */
+
+/* ==========================================================================
+   1. Base & Layout
+   ========================================================================== */
+   body {
+    background-color: var(--bg-light) !important; 
+    color: var(--text-color);
+    line-height: 1.6;
+}
+
+.page-wrapper {
+    padding-top: 80px; /* Space for fixed header on DESKTOP */
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+main {
+    flex-grow: 1; 
+    width: 100%;
+}
+
+.container {
+    max-width: 1200px;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 1rem;
+    padding-right: 1rem;
+}
+
+/* --- FIXED: Main Content Box Spacing --- */
+.main-content-box {
+    background-color: white;
+    padding: 2.5rem;
+    border-radius: 16px;
+    /* Soft shadow for depth */
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08); 
+    
+    /* CHANGED: Removed negative margin (-4rem) to stop covering the hero */
+    margin-top: 0; 
+    
+    /* Added margin-bottom for footer spacing */
+    margin-bottom: 4rem; 
+    
+    position: relative;
+    z-index: 10;
+}
+
+/* ==========================================================================
+   2. Header & Navigation
+   ========================================================================== */
+.luxury-header {
+    background: var(--bg-color);
+    border-bottom: 1px solid var(--border-color);
+    position: fixed; 
+    top: 0;
+    width: 100%;
+    z-index: 50;
+    transition: box-shadow 0.3s ease;
+}
+
+.nav-link { font-size: 14px; font-weight: 500; color: var(--text-gray); text-decoration: none; padding: 8px 16px; border-radius: 6px; transition: all 0.3s ease; }
+.nav-link:hover { color: var(--text-color); background: var(--bg-light); }
+.nav-link.active { color: var(--primary-color); font-weight: 600; }
+.nav-account { background: var(--primary-color); color: white; font-weight: 500; padding: 10px 20px; border-radius: 6px; transition: background-color 0.3s ease; text-decoration: none; }
+.nav-account:hover { background: var(--primary-color-hover); }
+.cart-badge { position: absolute; top: -5px; right: -5px; background: var(--primary-color); color: white; border-radius: 50%; width: 18px; height: 18px; font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; }
+
+/* ==========================================================================
+   3. Mobile Navigation
+   ========================================================================== */
+.mobile-menu-panel { background-color: white; border-bottom: 1px solid var(--border-color); }
+.mobile-nav-link { color: var(--text-gray); display: block; padding: 0.75rem 1rem; border-radius: 0.375rem; font-size: 1rem; font-weight: 500; }
+.mobile-nav-link:hover { color: var(--text-color); background-color: var(--bg-light); }
+
+/* ==========================================================================
+   4. Hero & Section Titles (FIXED)
+   ========================================================================== */
+.hero {
+    background: var(--primary-color); /* Matches theme color */
+    color: white;
+    text-align: center;
+    
+    /* CHANGED: Increased padding for better breathing room */
+    padding: 4rem 1rem 3rem 1rem; 
+    
+    /* CHANGED: Adjusted bottom margin to separate from content box */
+    margin-bottom: 2rem; 
+}
+
+.hero h1 { 
+    font-size: clamp(2rem, 5vw, 3rem); /* Responsive font size */
+    font-weight: 700; 
+    margin-bottom: 0.75rem; 
+}
+
+.hero p { 
+    font-size: 1.1rem; 
+    opacity: 0.95; 
+    max-width: 700px; 
+    margin: 0 auto; 
+}
+
+.section-title {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--text-color);
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+/* ==========================================================================
+   5. Filters Section (Products Page)
+   ========================================================================== */
+.filters-form {
+    padding-bottom: 2rem;
+    margin-bottom: 2rem;
+    border-bottom: 1px solid var(--border-color);
+}
+.filter-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5rem;
+}
+.filter-group label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-gray);
+    margin-bottom: 0.5rem;
+}
+.filter-input, .filter-select {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    font-size: 1rem;
+    background-color: var(--bg-light);
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+.filter-input:focus, .filter-select:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color) 20%, transparent);
+}
+.filter-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1.5rem;
+}
+
+/* ==========================================================================
+   6. Product Cards & Category Cards
+   ========================================================================== */
+.products-grid, .categories-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 1.5rem; margin-top: 2rem; }
+.card, .top-product-card {
+    background: white; border-radius: 12px; overflow: hidden;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05); transition: all 0.3s ease;
+    border: 1px solid var(--border-color); display: flex; flex-direction: column; text-decoration: none;
+}
+.card:hover, .top-product-card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.08); }
+.card-link { text-decoration: none; flex-grow: 1; display: flex; flex-direction: column; }
+.card-img { width: 100%; height: 250px; background: #f8f9fa; overflow: hidden; }
+.card-img img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.4s ease; }
+.card:hover .card-img img, .top-product-card:hover .card-img img { transform: scale(1.05); }
+.placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #adb5bd; gap: 0.5rem; font-size: 0.9rem;}
+.placeholder span:first-child { font-size: 2rem; }
+.card-body { padding: 1rem; flex-grow: 1; }
+.card-title { font-size: 1.1rem; font-weight: 600; color: var(--text-color); margin-bottom: 0.5rem; line-height: 1.4; }
+.price { font-size: 1.2rem; font-weight: 700; color: var(--text-color); }
+.card-text { font-size: 0.9rem; color: var(--text-gray); }
+.card-actions { padding: 0 1rem 1rem 1rem; }
+.category-card-link { text-decoration: none; }
+.browse-all { text-align: center; padding: 2.5rem; background-color: var(--bg-light); border-radius: 12px; margin-top: 3rem; }
+.browse-all h3 { font-size: 1.5rem; font-weight: 600; color: var(--text-color); }
+.browse-all p { margin-top: 0.5rem; color: var(--text-gray); }
+.browse-all .btn { margin-top: 1.5rem; }
+
+
+/* ==========================================================================
+   7. TOP PRODUCTS SECTION
+   ========================================================================== */
+.top-products-section { margin-bottom: 3rem; }
+.top-products-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); 
+    gap: 1.5rem;
+}
+.top-product-card {
+    text-decoration: none;
+    border-color: transparent;
+}
+.top-product-card:hover {
+     border-color: var(--primary-color);
+}
+.top-product-card .card-img {
+    height: 150px;
+}
+.top-product-card .card-body {
+    padding: 0.75rem;
+}
+.top-product-card .card-title {
+    font-size: 1rem;
+    font-weight: 500;
+}
+.top-product-card .price {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-top: 0.25rem;
+}
+
+
+/* ==========================================================================
+   8. General Components
+   ========================================================================== */
+.btn { padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.3s ease; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; border: 1px solid transparent; }
+.btn-primary { background: var(--primary-color); color: white; }
+.btn-primary:hover { background: var(--primary-color-hover); }
+.btn-secondary { background: var(--bg-light); color: var(--text-gray); border-color: var(--border-color); }
+.btn-secondary:hover { background-color: var(--border-color); }
+.empty-state { text-align: center; padding: 4rem 2rem; color: var(--text-gray); }
+.empty-state h3 { font-size: 1.5rem; color: var(--text-color); font-weight: 600; margin-bottom: 1rem; }
+
+/* ==========================================================================
+   9. Responsive Overrides
+   ========================================================================== */
+@media (max-width: 767px) {
+    .page-wrapper {
+        padding-top: 0;
+    }
+    .luxury-header {
+        position: relative; 
+    }
+    
+    /* FIXED: Adjusted mobile padding and margin */
+    .main-content-box {
+        margin-top: 1.5rem; /* Positive margin for mobile */
+        padding: 1.5rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    
+    .hero { 
+        padding: 3rem 1rem; 
+        margin-bottom: 1rem; 
+    }
+    
+    .products-grid, .categories-grid { grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+    .top-products-grid { grid-template-columns: repeat(2, 1fr); gap: 1rem; } 
+    .card-img { height: 180px; }
+}

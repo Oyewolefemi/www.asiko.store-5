@@ -1,0 +1,8 @@
+# weds/kiosk/.htaccess
+<FilesMatch "^\.env">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Optional: Prevent directory browsing
+Options -Indexes
