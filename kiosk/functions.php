@@ -2,7 +2,7 @@
 // /kiosk/functions.php
 
 error_reporting(E_ALL);
-ini_set('display_errors', 1);
+ini_set('display_errors', 0);
 
 if (!function_exists('sanitize')) {
     function sanitize($data) {
