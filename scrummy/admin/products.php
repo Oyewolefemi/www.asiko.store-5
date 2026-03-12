@@ -2,46 +2,38 @@
 require_once '../config.php';
 include '../includes/admin_header.php';
 
-// Ensure CSRF token exists for this session
 if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 $csrf_token = $_SESSION['csrf_token'];
 
-// Helper to validate CSRF on GET actions
-function verify_get_csrf() {
-    if (!isset($_GET['csrf']) || !hash_equals($_SESSION['csrf_token'], $_GET['csrf'])) {
-        die("Security Check Failed: Invalid CSRF Token.");
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!isset($_POST['csrf']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf'])) {
+        http_response_code(403);
+        exit('Security Check Failed: Invalid CSRF Token.');
     }
-}
 
-// Handle Toggles & Deletes (Now using Prepared Statements + CSRF Protection)
-if (isset($_GET['toggle_active'])) {
-    verify_get_csrf();
-    $stmt = $pdo->prepare("UPDATE products SET is_active = NOT is_active WHERE id = ?");
-    $stmt->execute([$_GET['toggle_active']]);
-    echo "<script>window.location.href='products.php';</script>";
+    $action = $_POST['action'] ?? '';
+    $productId = (int)($_POST['product_id'] ?? 0);
+
+    if ($productId > 0) {
+        if ($action === 'toggle_active') {
+            $stmt = $pdo->prepare('UPDATE products SET is_active = NOT is_active WHERE id = ?');
+            $stmt->execute([$productId]);
+        } elseif ($action === 'toggle_deal') {
+            $stmt = $pdo->prepare('UPDATE products SET is_top_deal = NOT is_top_deal WHERE id = ?');
+            $stmt->execute([$productId]);
+        } elseif ($action === 'delete') {
+            $pdo->prepare('DELETE FROM product_ingredients WHERE product_id = ?')->execute([$productId]);
+            $pdo->prepare('DELETE FROM products WHERE id = ?')->execute([$productId]);
+        }
+    }
+
+    header('Location: products.php');
     exit;
 }
 
-if (isset($_GET['toggle_deal'])) {
-    verify_get_csrf();
-    $stmt = $pdo->prepare("UPDATE products SET is_top_deal = NOT is_top_deal WHERE id = ?");
-    $stmt->execute([$_GET['toggle_deal']]);
-    echo "<script>window.location.href='products.php';</script>";
-    exit;
-}
-
-if (isset($_GET['delete'])) {
-    verify_get_csrf();
-    $id = $_GET['delete'];
-    $pdo->prepare("DELETE FROM product_ingredients WHERE product_id = ?")->execute([$id]);
-    $pdo->prepare("DELETE FROM products WHERE id = ?")->execute([$id]);
-    echo "<script>window.location.href='products.php';</script>";
-    exit;
-}
-
-$products = $pdo->query("SELECT * FROM products ORDER BY id DESC")->fetchAll();
+$products = $pdo->query('SELECT * FROM products ORDER BY id DESC')->fetchAll();
 ?>
 
 <div class="flex justify-between items-center mb-6">
@@ -86,16 +78,31 @@ $products = $pdo->query("SELECT * FROM products ORDER BY id DESC")->fetchAll();
                     <?php endif; ?>
                 </td>
                 <td class="p-4 text-center">
-                    <a href="?toggle_deal=<?= $p['id'] ?>&csrf=<?= $csrf_token ?>" class="material-symbols-outlined <?= $p['is_top_deal'] ? 'text-orange-500' : 'text-gray-200' ?> hover:scale-110 transition">star</a>
+                    <form method="POST" class="inline">
+                        <input type="hidden" name="csrf" value="<?= $csrf_token ?>">
+                        <input type="hidden" name="action" value="toggle_deal">
+                        <input type="hidden" name="product_id" value="<?= (int)$p['id'] ?>">
+                        <button type="submit" class="material-symbols-outlined <?= $p['is_top_deal'] ? 'text-orange-500' : 'text-gray-200' ?> hover:scale-110 transition">star</button>
+                    </form>
                 </td>
                 <td class="p-4 text-center">
-                    <a href="?toggle_active=<?= $p['id'] ?>&csrf=<?= $csrf_token ?>" class="text-xs font-bold px-2 py-1 rounded <?= $p['is_active'] ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700' ?>">
-                        <?= $p['is_active'] ? 'Active' : 'Hidden' ?>
-                    </a>
+                    <form method="POST" class="inline">
+                        <input type="hidden" name="csrf" value="<?= $csrf_token ?>">
+                        <input type="hidden" name="action" value="toggle_active">
+                        <input type="hidden" name="product_id" value="<?= (int)$p['id'] ?>">
+                        <button type="submit" class="text-xs font-bold px-2 py-1 rounded <?= $p['is_active'] ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700' ?>">
+                            <?= $p['is_active'] ? 'Active' : 'Hidden' ?>
+                        </button>
+                    </form>
                 </td>
                 <td class="p-4 text-right">
                     <a href="product_form.php?id=<?= $p['id'] ?>" class="text-blue-600 font-bold hover:underline">Edit</a>
-                    <a href="?delete=<?= $p['id'] ?>&csrf=<?= $csrf_token ?>" onclick="return confirm('Delete this item?')" class="text-red-500 font-bold ml-3 hover:underline">Delete</a>
+                    <form method="POST" class="inline ml-3" onsubmit="return confirm('Delete this item?')">
+                        <input type="hidden" name="csrf" value="<?= $csrf_token ?>">
+                        <input type="hidden" name="action" value="delete">
+                        <input type="hidden" name="product_id" value="<?= (int)$p['id'] ?>">
+                        <button type="submit" class="text-red-500 font-bold hover:underline">Delete</button>
+                    </form>
                 </td>
             </tr>
             <?php endforeach; ?>

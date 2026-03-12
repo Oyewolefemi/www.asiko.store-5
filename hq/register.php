@@ -10,7 +10,8 @@ try {
     $pdo = new PDO("mysql:host=".$_ENV['DB_HOST'].";dbname=".$_ENV['DB_NAME_HQ'].";charset=".$_ENV['DB_CHARSET'], $_ENV['DB_USER_HQ'], $_ENV['DB_PASS_HQ']);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 } catch (PDOException $e) {
-    die("HQ Database connection failed: " . $e->getMessage());
+    error_log('HQ Database connection failed: ' . $e->getMessage());
+    die('System unavailable. Please try again later.');
 }
 
 $message = '';

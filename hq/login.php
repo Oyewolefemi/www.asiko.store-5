@@ -11,7 +11,8 @@ try {
     $pdo = new PDO("mysql:host=".$_ENV['DB_HOST'].";dbname=".$_ENV['DB_NAME_HQ'].";charset=".$_ENV['DB_CHARSET'], $_ENV['DB_USER_HQ'], $_ENV['DB_PASS_HQ']);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 } catch (PDOException $e) {
-    die("HQ Database connection failed: " . $e->getMessage());
+    error_log('HQ Database connection failed: ' . $e->getMessage());
+    die('System unavailable. Please try again later.');
 }
 
 $error = '';
@@ -51,31 +52,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $base64UrlPayload = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode(json_encode($payload)));
         
         $privateKeyPath = __DIR__ . '/keys/private.pem';
-        $privateKey = openssl_pkey_get_private(file_get_contents($privateKeyPath));
-        $signature = '';
-        openssl_sign($base64UrlHeader . "." . $base64UrlPayload, $signature, $privateKey, OPENSSL_ALGO_SHA256);
-        $base64UrlSignature = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($signature));
-        
-        $jwt = $base64UrlHeader . "." . $base64UrlPayload . "." . $base64UrlSignature;
-
-        // 5. Set the Master Cookie
-        setcookie('asiko_sso_token', $jwt, [
-            'expires' => time() + 86400,
-            'path' => '/',
-            'domain' => '',
-            'secure' => true,
-            'httponly' => true,
-            'samesite' => 'Lax'
-        ]);
-
-        // 6. Redirect back to the requesting app
-        if ($target_app === 'hq') {
-            header("Location: index.php");
-        } else {
-            $safe_path = preg_replace('/[^a-zA-Z0-9_\/-]/', '', $target_app);
-            header("Location: /" . ltrim($safe_path, '/'));
+        if (!file_exists($privateKeyPath)) {
+            error_log('HQ SSO private key missing.');
+            $error = 'Authentication service temporarily unavailable.';
         }
-        exit;
+
+        $privateKeyRaw = file_exists($privateKeyPath) ? file_get_contents($privateKeyPath) : '';
+        if (strpos($privateKeyRaw, 'REPLACE_WITH_RUNTIME_PRIVATE_KEY_FROM_SECRET_MANAGER') !== false) {
+            error_log('HQ SSO private key placeholder detected.');
+            $error = 'Authentication service temporarily unavailable.';
+        }
+
+        if (!$error) {
+            $privateKey = openssl_pkey_get_private($privateKeyRaw);
+            if (!$privateKey) {
+                error_log('Failed to parse HQ private key.');
+                $error = 'Authentication service temporarily unavailable.';
+            }
+        }
+
+        if (!$error) {
+            $signature = '';
+            openssl_sign($base64UrlHeader . "." . $base64UrlPayload, $signature, $privateKey, OPENSSL_ALGO_SHA256);
+            $base64UrlSignature = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($signature));
+
+            $jwt = $base64UrlHeader . "." . $base64UrlPayload . "." . $base64UrlSignature;
+
+            // 5. Set the Master Cookie
+            setcookie('asiko_sso_token', $jwt, [
+                'expires' => time() + 86400,
+                'path' => '/',
+                'domain' => '',
+                'secure' => true,
+                'httponly' => true,
+                'samesite' => 'Lax'
+            ]);
+
+            // 6. Redirect back to the requesting app
+            if ($target_app === 'hq') {
+                header("Location: index.php");
+            } else {
+                $safe_path = preg_replace('/[^a-zA-Z0-9_\/-]/', '', $target_app);
+                header("Location: /" . ltrim($safe_path, '/'));
+            }
+            exit;
+        }
     } else {
         $error = "Invalid username or password.";
     }
