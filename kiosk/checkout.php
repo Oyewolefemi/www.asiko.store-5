@@ -2,7 +2,7 @@
 // kiosk/checkout.php
 ob_start();
 
-include 'header.php'; // Ensure this includes config.php and functions.php
+include 'header.php'; 
 
 // Ensure User is Logged In
 $user_id = $_SESSION['user_id'] ?? 0;
@@ -84,14 +84,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'check
     $destination_city = '';
 
     if (empty($errors)) {
-        require_once 'get_delivery_fee.php'; // Include delivery fee calculator
+        require_once 'get_delivery_fee.php'; 
 
         if ($_POST['address_option'] === 'new') {
             if (empty(trim($_POST['new_address_line1'] ?? ''))) {
                 $errors[] = "Please fill in your new address details.";
             } else {
                 try {
-                    $destination_city = sanitize($_POST['new_city']); // Capture city
+                    $destination_city = sanitize($_POST['new_city']); 
                     $stmtIns = $pdo->prepare("INSERT INTO addresses (user_id, full_name, address_line1, city, state, created_at) VALUES (?, ?, ?, ?, ?, NOW())");
                     $stmtIns->execute([
                         $user_id, 
@@ -110,7 +110,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'check
             $stmt->execute([$address_id, $user_id]);
             $addr = $stmt->fetch();
             if ($addr) {
-                $destination_city = $addr['city']; // Capture city
+                $destination_city = $addr['city']; 
                 $shipping_address_text = $addr['full_name'] . ', ' . $addr['address_line1'] . ', ' . $destination_city;
             } else {
                 $errors[] = "Invalid address selected.";
@@ -175,7 +175,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'check
             // --- 3. CREATE ORDER RECORD ---
             $stmtOrder = $pdo->prepare("INSERT INTO orders (user_id, order_number, total_amount, delivery_fee, status, address_id, payment_method, delivery_option, shipping_address, created_at, order_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())");
             
-            // Replaced hardcoded 0 with dynamic $delivery_fee and $final_order_total
             $stmtOrder->execute([$user_id, $order_number, $final_order_total, $delivery_fee, 'payment_submitted', $address_id, 'manual', 'standard', $shipping_address_text]);
             $order_id = $pdo->lastInsertId();
 
@@ -201,42 +200,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'check
             
             $pdo->commit();
 
-            // --- 5. SEND EMAIL ---
+            // --- 5. NEW: FIRE MAILING EVENT TO THE QUEUE ---
             if (!empty($userEmail)) {
-                // Include the central mailer system
-                include_once __DIR__ . '/../mailing/mailer.php';
-                
-                // Build the order items table
-                $itemsHtml = "<table style='width:100%; border-collapse: collapse; margin-top:10px;'>";
-                foreach ($order_items_data as $it) {
-                    $itemsHtml .= "<tr>
-                        <td style='padding:8px; border-bottom:1px solid #eee;'>{$it['name']} <small>(x{$it['quantity']})</small></td>
-                        <td style='padding:8px; border-bottom:1px solid #eee; text-align:right;'>₦" . number_format($it['price'] * $it['quantity'], 2) . "</td>
-                    </tr>";
-                }
-                $itemsHtml .= "</table>";
-
-                // Build the specific message body for checkout
-                $messageBody = "
-                    <h2 style='color: #1a1a1a;'>Order Received!</h2>
-                    <p>Hi {$userName},</p>
-                    <p>We have successfully received your order <strong>#{$order_number}</strong>.</p>
-                    
-                    <h3>Order Summary</h3>
-                    {$itemsHtml}
-                    <p style='text-align:right; font-weight:bold; font-size:18px; margin-top:10px;'>Total: ₦" . number_format($final_order_total, 2) . "</p>
-                    
-                    <div style='background: #f0f9ff; padding: 15px; border-radius: 5px; margin-top: 20px; border-left: 4px solid #0284c7;'>
-                        <strong>Payment Instructions (Bank Transfer):</strong><br>
-                        Bank: {$paymentConfig['bank_name']}<br>
-                        Account: {$paymentConfig['account_number']}<br>
-                        Name: {$paymentConfig['account_name']}<br>
-                        <small>Please include your Order # as the reference.</small>
-                    </div>
-                ";
-
-                // Send using the central function
-                sendAsikoMail($userEmail, $userName, "Order Received - #{$order_number}", $messageBody);
+                fire_mail_event('order.placed', [
+                    'customer_email' => $userEmail,
+                    'customer_name'  => $userName,
+                    'order_id'       => $order_id,
+                    'order_number'   => $order_number,
+                    'total_amount'   => '₦' . number_format($final_order_total, 2),
+                    'site_name'      => 'Asiko Kiosk'
+                ], 'kiosk');
             }
             
             // Redirect to Confirmation
@@ -354,7 +327,6 @@ $grandTotal = $subtotal;
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-    // Toggle New Address Form
     const opts = document.querySelectorAll('input[name="address_option"]');
     const form = document.getElementById('newAddressForm');
     const inputs = form.querySelectorAll('input');
@@ -366,7 +338,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     opts.forEach(opt => opt.addEventListener('change', toggleForm));
-    toggleForm(); // Init
+    toggleForm(); 
 });
 </script>
 

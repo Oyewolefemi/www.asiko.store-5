@@ -1,72 +1,83 @@
 <?php
-// admin/login.php
+// hq/login.php
 session_start();
 
-// We need a hardcoded "Anchor" connection just to verify the Super Admin.
-// We load the main Kiosk environment for this.
-require_once __DIR__ . '/../kiosk/EnvLoader.php';
-EnvLoader::load(__DIR__ . '/../kiosk/.env');
-
-// Using your exact .env values as fallbacks in case EnvLoader pathing fails
-$anchor_host = EnvLoader::get('DB_HOST', '127.0.0.1');
-$anchor_name = EnvLoader::get('DB_NAME', 'asiko');
-$anchor_user = EnvLoader::get('DB_USER', 'levi');
-$anchor_pass = EnvLoader::get('DB_PASS', 'Blueradish@8');
+// 1. Load HQ Database Connection
+require_once __DIR__ . '/EnvLoader.php';
+EnvLoader::load(__DIR__ . '/../.env');
 
 try {
-    $pdo_anchor = new PDO("mysql:host=$anchor_host;dbname=$anchor_name;charset=utf8mb4", $anchor_user, $anchor_pass);
-    $pdo_anchor->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    // FIXED: Now properly connecting to hq_db!
+    $pdo = new PDO("mysql:host=".$_ENV['DB_HOST'].";dbname=".$_ENV['DB_NAME_HQ'].";charset=".$_ENV['DB_CHARSET'], $_ENV['DB_USER_HQ'], $_ENV['DB_PASS_HQ']);
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 } catch (PDOException $e) {
-    // If it fails, print a clean, detailed error box to the screen
-    die("
-        <div style='font-family: sans-serif; padding: 20px; background: #fee2e2; color: #991b1b; border: 1px solid #f87171; border-radius: 8px; max-width: 600px; margin: 40px auto; box-shadow: 0 4px 6px rgba(0,0,0,0.1);'>
-            <h3 style='margin-top: 0; font-size: 20px;'>Master Anchor Connection Failed</h3>
-            <p><b>Attempted Host:</b> " . htmlspecialchars($anchor_host) . "</p>
-            <p><b>Attempted DB Name:</b> " . htmlspecialchars($anchor_name) . "</p>
-            <p><b>Attempted User:</b> " . htmlspecialchars($anchor_user) . "</p>
-            <hr style='border: 0; border-top: 1px solid #fca5a5; margin: 15px 0;'>
-            <p><b>MySQL Error:</b> " . htmlspecialchars($e->getMessage()) . "</p>
-            <p style='font-size: 12px; margin-bottom: 0; color: #b91c1c; margin-top: 15px;'><em>Check your relative path to kiosk/.env and database permissions.</em></p>
-        </div>
-    ");
-}
-
-// Redirect if already logged in
-if (isset($_SESSION['master_admin_id'])) {
-    header("Location: index.php");
-    exit;
+    die("HQ Database connection failed: " . $e->getMessage());
 }
 
 $error = '';
+$app_slug = $_GET['app'] ?? 'hq';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = trim($_POST['username']);
     $password = $_POST['password'];
+    $target_app = $_POST['app_slug'];
 
-    try {
-        $stmt = $pdo_anchor->prepare("SELECT * FROM admins WHERE username = ? AND role = 'superadmin'");
-        $stmt->execute([$username]);
-        $admin = $stmt->fetch(PDO::FETCH_ASSOC);
+    // 2. Verify against the HQ Vault
+    $stmt = $pdo->prepare("SELECT id, username, password, role FROM admins WHERE username = :username LIMIT 1");
+    $stmt->execute([':username' => $username]);
+    $admin = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        if ($admin && password_verify($password, $admin['password_hash'])) {
-            
-            // 1. HQ Session
-            $_SESSION['master_admin_id'] = $admin['id'];
-            $_SESSION['master_admin_user'] = $admin['username'];
+    if ($admin && password_verify($password, $admin['password'])) {
+        
+        // --- ADDED: Set the Master Session for the HQ Dashboard ---
+        $_SESSION['master_admin_id'] = $admin['id'];
+        $_SESSION['master_admin_user'] = $admin['username'];
+        // ----------------------------------------------------------
+        
+        // 3. Build the JWT Payload
+        $payload = [
+            'iss' => 'asiko_hq',
+            'aud' => $target_app,
+            'iat' => time(),
+            'exp' => time() + (86400),
+            'user_id' => $admin['id'],
+            'name' => $admin['username'],
+            'role' => $admin['role'] ?? 'superadmin'
+        ];
 
-            // 2. UNIVERSAL SSO KEYS
-            // These keys instantly unlock Kiosk (Red), Scrummy, and the Mailing module
-            $_SESSION['admin_id'] = $admin['id'];
-            $_SESSION['admin_role'] = 'superadmin';
-            $_SESSION['admin_name'] = 'HQ Master';
-            
+        // 4. Sign the Token
+        $header = json_encode(['typ' => 'JWT', 'alg' => 'RS256']);
+        $base64UrlHeader = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($header));
+        $base64UrlPayload = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode(json_encode($payload)));
+        
+        $privateKeyPath = __DIR__ . '/keys/private.pem';
+        $privateKey = openssl_pkey_get_private(file_get_contents($privateKeyPath));
+        $signature = '';
+        openssl_sign($base64UrlHeader . "." . $base64UrlPayload, $signature, $privateKey, OPENSSL_ALGO_SHA256);
+        $base64UrlSignature = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($signature));
+        
+        $jwt = $base64UrlHeader . "." . $base64UrlPayload . "." . $base64UrlSignature;
+
+        // 5. Set the Master Cookie
+        setcookie('asiko_sso_token', $jwt, [
+            'expires' => time() + 86400,
+            'path' => '/',
+            'domain' => '',
+            'secure' => true,
+            'httponly' => true,
+            'samesite' => 'Lax'
+        ]);
+
+        // 6. Redirect back to the requesting app
+        if ($target_app === 'hq') {
             header("Location: index.php");
-            exit;
         } else {
-            $error = "Invalid Super Admin credentials.";
+            $safe_path = preg_replace('/[^a-zA-Z0-9_\/-]/', '', $target_app);
+            header("Location: /" . ltrim($safe_path, '/'));
         }
-    } catch (PDOException $e) {
-        $error = "Database query error: " . $e->getMessage();
+        exit;
+    } else {
+        $error = "Invalid username or password.";
     }
 }
 ?>
@@ -74,39 +85,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Master Control - Login</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Asiko SSO - Secure Login</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
 </head>
-<body class="bg-gray-900 flex items-center justify-center h-screen font-sans">
-    <div class="bg-white p-8 rounded-xl shadow-2xl w-full max-w-sm">
+<body class="bg-gray-100 h-screen flex items-center justify-center font-sans">
+    <div class="bg-white p-8 rounded-xl shadow-lg max-w-md w-full border border-gray-200">
         <div class="text-center mb-8">
-            <h1 class="text-3xl font-black text-gray-800 tracking-wider">ASIKO <span class="text-blue-600">HQ</span></h1>
-            <p class="text-[10px] text-gray-500 uppercase tracking-widest mt-2 font-bold">System Architecture</p>
+            <h1 class="text-2xl font-bold text-gray-800">Asiko Ecosystem</h1>
+            <p class="text-sm text-gray-500 mt-2">Log in once to access <span class="font-bold text-green-600 uppercase"><?php echo htmlspecialchars($app_slug); ?></span></p>
         </div>
 
         <?php if ($error): ?>
-            <div class="bg-red-50 border border-red-200 text-red-700 p-3 text-sm rounded mb-6 font-bold flex items-start gap-2">
-                <span>⚠️</span> <?= htmlspecialchars($error) ?>
+            <div class="bg-red-50 text-red-600 p-3 rounded mb-4 text-sm text-center border border-red-200 font-bold">
+                <?php echo htmlspecialchars($error); ?>
             </div>
         <?php endif; ?>
 
-        <form method="POST" class="space-y-5">
-            <div>
-                <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Username</label>
-                <input type="text" name="username" required class="w-full border border-gray-300 p-3 rounded-lg bg-gray-50 outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition">
+        <form method="POST" action="">
+            <input type="hidden" name="app_slug" value="<?php echo htmlspecialchars($app_slug); ?>">
+            <div class="mb-4">
+                <label class="block text-gray-700 text-sm font-bold mb-2">Username</label>
+                <input type="text" name="username" required class="w-full px-4 py-3 rounded border border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-900 transition">
             </div>
-            <div>
-                <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Password</label>
-                <input type="password" name="password" required class="w-full border border-gray-300 p-3 rounded-lg bg-gray-50 outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition">
+            <div class="mb-6">
+                <label class="block text-gray-700 text-sm font-bold mb-2">Password</label>
+                <input type="password" name="password" required class="w-full px-4 py-3 rounded border border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-900 transition">
             </div>
-            <button type="submit" class="w-full bg-gray-900 hover:bg-black text-white font-bold py-3.5 rounded-lg transition shadow-lg mt-2">
-                Initialize System
+            <button type="submit" class="w-full bg-gray-900 hover:bg-black text-white font-bold py-3 px-4 rounded-lg shadow-md transition">
+                Authenticate & Continue
             </button>
         </form>
-        
-        <div class="mt-6 text-center border-t pt-4">
-            <p class="text-xs text-gray-400">Authorized Personnel Only</p>
-        </div>
     </div>
 </body>
 </html>

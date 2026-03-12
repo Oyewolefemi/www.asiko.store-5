@@ -1,4 +1,5 @@
 <?php
+// scrummy/includes/admin_header.php
 if (session_status() === PHP_SESSION_NONE) session_start();
 
 // Prevent Browser Caching
@@ -9,12 +10,45 @@ header("Pragma: no-cache");
 $isInSubfolder = strpos($_SERVER['SCRIPT_NAME'], '/inventory/') !== false;
 $pathToAdmin = $isInSubfolder ? '../' : ''; 
 
-if (!isset($_SESSION['admin_id'])) { 
+// ==========================================
+// THE ASIKO SSO VERIFICATION VAULT
+// ==========================================
+$isAuthenticated = false;
+$sso_token = $_COOKIE['asiko_sso_token'] ?? null;
+
+if ($sso_token) {
+    $parts = explode('.', $sso_token);
+    if (count($parts) === 3) {
+        list($header64, $payload64, $signature64) = $parts;
+        $publicKeyPath = __DIR__ . '/../../hq/keys/public.pem'; 
+        if (file_exists($publicKeyPath)) {
+            $publicKey = openssl_pkey_get_public(file_get_contents($publicKeyPath));
+            $signature = base64_decode(str_replace(['-', '_'], ['+', '/'], $signature64));
+            $dataToSign = $header64 . "." . $payload64;
+            if (openssl_verify($dataToSign, $signature, $publicKey, OPENSSL_ALGO_SHA256) === 1) {
+                $payload = json_decode(base64_decode(str_replace(['-', '_'], ['+', '/'], $payload64)), true);
+                if (isset($payload['exp']) && $payload['exp'] >= time()) {
+                    $_SESSION['admin_id'] = $payload['user_id'];
+                    $_SESSION['admin_name'] = $payload['name'];
+                    $_SESSION['admin_role'] = $payload['role'] ?? 'admin';
+                    $isAuthenticated = true;
+                }
+            }
+        }
+    }
+}
+
+// Fallback to local session if no SSO but session exists
+if (isset($_SESSION['admin_id'])) { $isAuthenticated = true; }
+
+if (!$isAuthenticated) { 
     header("Location: " . $pathToAdmin . "login.php"); 
     exit; 
 }
+// ==========================================
 
-$root = "/scrummy 6"; 
+require_once __DIR__ . '/../config.php';
+$root = "/scrummy"; 
 
 // Defaults
 $brandColor  = $settings['primary_color'] ?? '#ec6d13';
@@ -41,7 +75,6 @@ $bodyColor   = $settings['body_bg'] ?? '#f9fafb';
     </script>
     <style>
         body { background-color: <?= $bodyColor ?> !important; }
-        /* Only apply header color to the top navbar, not the sidebar */
         .admin-top-bar { background-color: <?= $headerColor ?> !important; }
     </style>
 </head>
@@ -68,6 +101,10 @@ $bodyColor   = $settings['body_bg'] ?? '#f9fafb';
             <a href="<?= $pathToAdmin ?>inventory/index.php" class="flex items-center px-3 py-2.5 rounded-lg hover:bg-gray-800 transition group">
                 <span class="material-symbols-outlined mr-3 text-gray-400 group-hover:text-white">inventory_2</span> Supplies
             </a>
+            
+            <a href="<?= $pathToAdmin ?>staff.php" class="flex items-center px-3 py-2.5 rounded-lg hover:bg-gray-800 transition group">
+                <span class="material-symbols-outlined mr-3 text-gray-400 group-hover:text-white">badge</span> Manage Staff
+            </a>
 
             <div class="px-3 mt-6 mb-2 text-xs font-bold text-gray-500 uppercase tracking-wider">System</div>
             <a href="<?= $pathToAdmin ?>settings.php" class="flex items-center px-3 py-2.5 rounded-lg hover:bg-gray-800 transition group">
@@ -90,15 +127,11 @@ $bodyColor   = $settings['body_bg'] ?? '#f9fafb';
     </div>
 
     <div id="mob-menu" class="hidden fixed inset-0 z-40 bg-gray-900/95 backdrop-blur-sm lg:hidden pt-20 px-6 space-y-4">
-        <a href="<?= $pathToAdmin ?>index.php" class="block text-white text-lg font-bold border-b border-gray-700 pb-2">Dashboard</a>
-        <a href="<?= $pathToAdmin ?>orders.php" class="block text-white text-lg font-bold border-b border-gray-700 pb-2">Orders</a>
-        <a href="<?= $pathToAdmin ?>products.php" class="block text-white text-lg font-bold border-b border-gray-700 pb-2">Menu</a>
-        <a href="<?= $pathToAdmin ?>inventory/index.php" class="block text-white text-lg font-bold border-b border-gray-700 pb-2">Supplies</a>
-        <a href="<?= $pathToAdmin ?>settings.php" class="block text-white text-lg font-bold border-b border-gray-700 pb-2">Settings</a>
+        <a href="<?= $pathToAdmin ?>index.php" class="block text-white text-lg font-bold">Dashboard</a>
+        <a href="<?= $pathToAdmin ?>orders.php" class="block text-white text-lg font-bold">Orders</a>
+        <a href="<?= $pathToAdmin ?>products.php" class="block text-white text-lg font-bold">Menu</a>
+        <a href="<?= $pathToAdmin ?>staff.php" class="block text-white text-lg font-bold">Staff</a>
         <a href="<?= $pathToAdmin ?>logout.php" class="block text-red-500 text-lg font-bold pt-4">Logout</a>
-        <button onclick="document.getElementById('mob-menu').classList.add('hidden')" class="absolute top-4 right-4 text-white p-2 bg-gray-800 rounded-full">
-            <span class="material-symbols-outlined">close</span>
-        </button>
     </div>
 
     <div class="flex-1 lg:ml-64 flex flex-col min-h-screen pt-16 lg:pt-0">
@@ -109,7 +142,7 @@ $bodyColor   = $settings['body_bg'] ?? '#f9fafb';
             <div class="flex items-center gap-3">
                 <div class="text-right">
                     <div class="text-sm font-bold text-gray-900"><?= $_SESSION['admin_name'] ?? 'Admin' ?></div>
-                    <div class="text-xs text-gray-500">Manager</div>
+                    <div class="text-xs text-gray-500"><?= ucfirst($_SESSION['admin_role'] ?? 'Manager') ?></div>
                 </div>
                 <div class="size-10 rounded-full bg-primary text-white flex items-center justify-center font-bold text-lg shadow-sm">
                     <?= strtoupper(substr($_SESSION['admin_name'] ?? 'A', 0, 1)) ?>

@@ -6,9 +6,10 @@ session_start();
 require_once 'db.php'; 
 require_once 'api/remote_mailer.php'; 
 
-// Security Check - Only Super Admin can send blasts
-if (!isset($_SESSION['admin_role']) || $_SESSION['admin_role'] !== 'superadmin') {
-    die("Access Denied. Only Super Admin can send bulk emails.");
+// Security Check - Use HQ Master Vault Session
+if (!isset($_SESSION['master_admin_id'])) {
+    header("Location: ../hq/login.php?app=mailing/compose.php");
+    exit;
 }
 
 $msg = '';
@@ -142,7 +143,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 <header class="bg-white shadow-sm border-b px-6 py-4 flex justify-between items-center">
     <h1 class="font-bold text-xl text-gray-800">Mailing Microservice</h1>
-    <a href="../kiosk/Red/admin_dashboard.php" class="text-blue-600 hover:underline text-sm font-bold">← Back to Ecosystem</a>
+    <a href="../hq/index.php" class="text-blue-600 hover:underline text-sm font-bold">← Back to Directory</a>
 </header>
 
 <div class="container mx-auto mt-8 px-4 pb-12 max-w-6xl">

@@ -1,119 +1,119 @@
 <?php
 // kiosk/Red/admin_dashboard.php
-include 'header.php'; 
+include 'header.php';
 
-// Check Role
 $is_super = ($_SESSION['admin_role'] ?? '') === 'superadmin';
-$admin_id = $_SESSION['admin_id'];
+$current_admin_id = $_SESSION['admin_id'];
 
-// --- STATS CALCULATION ---
+// THE FIX: Safe fallback for the username using the null coalescing operator (??)
+$admin_name = $_SESSION['admin_username'] ?? 'Store Manager';
+
+// Fetch basic stats dynamically based on role
+$stats = ['products' => 0, 'orders' => 0, 'revenue' => 0, 'low_stock' => 0];
+
 try {
     if ($is_super) {
-        // GLOBAL STATS (Super Admin)
-        $stats_stmt = $pdo->query("
-            SELECT 
-                (SELECT COUNT(*) FROM users) as total_users,
-                (SELECT COUNT(*) FROM products) as total_products,
-                (SELECT COUNT(*) FROM orders) as total_orders,
-                (SELECT SUM(total_amount + delivery_fee) FROM orders WHERE status = 'active') as total_revenue
-        ");
-        $stats = $stats_stmt->fetch(PDO::FETCH_ASSOC);
+        // Super Admin sees EVERYTHING
+        $stats['products'] = $pdo->query("SELECT COUNT(*) FROM products")->fetchColumn();
+        $stats['orders'] = $pdo->query("SELECT COUNT(*) FROM orders")->fetchColumn();
+        $stats['revenue'] = $pdo->query("SELECT SUM(total_amount) FROM orders WHERE status != 'cancelled'")->fetchColumn() ?: 0;
+        $stats['low_stock'] = $pdo->query("SELECT COUNT(*) FROM products WHERE stock_quantity < 5")->fetchColumn();
     } else {
-        // VENDOR SPECIFIC STATS
-        // Revenue: Sum of (price_at_purchase * qty) from order_details linked to this vendor's products
-        // Orders: Count of distinct orders that contain at least one of this vendor's products
-        $sql = "
-            SELECT 
-                (SELECT COUNT(*) FROM products WHERE admin_id = ?) as total_products,
-                
-                (SELECT COUNT(DISTINCT od.order_id) 
-                 FROM order_details od 
-                 JOIN products p ON od.product_id = p.id 
-                 WHERE p.admin_id = ?) as total_orders,
-                 
-                (SELECT COALESCE(SUM(od.price_at_purchase * od.quantity), 0) 
-                 FROM order_details od 
-                 JOIN products p ON od.product_id = p.id 
-                 JOIN orders o ON od.order_id = o.id
-                 WHERE p.admin_id = ? AND o.status = 'active') as total_revenue
-        ";
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute([$admin_id, $admin_id, $admin_id]);
-        $stats = $stmt->fetch(PDO::FETCH_ASSOC);
-        $stats['total_users'] = 'N/A'; // Vendors don't see total users
+        // Vendor only sees their own stats
+        $stmt_prod = $pdo->prepare("SELECT COUNT(*) FROM products WHERE admin_id = ?");
+        $stmt_prod->execute([$current_admin_id]);
+        $stats['products'] = $stmt_prod->fetchColumn();
+
+        $stmt_orders = $pdo->prepare("SELECT COUNT(DISTINCT o.id) FROM orders o JOIN order_items oi ON o.id = oi.order_id JOIN products p ON oi.product_id = p.id WHERE p.admin_id = ?");
+        $stmt_orders->execute([$current_admin_id]);
+        $stats['orders'] = $stmt_orders->fetchColumn();
+
+        $stmt_rev = $pdo->prepare("SELECT SUM(oi.price * oi.quantity) FROM order_items oi JOIN products p ON oi.product_id = p.id JOIN orders o ON oi.order_id = o.id WHERE p.admin_id = ? AND o.status != 'cancelled'");
+        $stmt_rev->execute([$current_admin_id]);
+        $stats['revenue'] = $stmt_rev->fetchColumn() ?: 0;
+        
+        $stmt_stock = $pdo->prepare("SELECT COUNT(*) FROM products WHERE admin_id = ? AND stock_quantity < 5");
+        $stmt_stock->execute([$current_admin_id]);
+        $stats['low_stock'] = $stmt_stock->fetchColumn();
     }
 } catch (Exception $e) {
-    $stats = ['total_products' => 0, 'total_orders' => 0, 'total_revenue' => 0, 'total_users' => 0];
+    error_log("Dashboard Stats Error: " . $e->getMessage());
 }
-
-// Fetch Activities
-try {
-    $act_sql = "SELECT * FROM admin_activities WHERE admin_id = ? ORDER BY created_at DESC LIMIT 5";
-    $act_stmt = $pdo->prepare($act_sql);
-    $act_stmt->execute([$admin_id]);
-    $recent_activities = $act_stmt->fetchAll();
-} catch (Exception $e) { $recent_activities = []; }
 ?>
 
-    <div class="flex justify-between items-center mb-8">
+<div class="mb-8">
+    <h1 class="text-3xl font-bold text-gray-800 tracking-tight">
+        Welcome back, <?php echo htmlspecialchars($admin_name, ENT_QUOTES, 'UTF-8'); ?>!
+    </h1>
+    <p class="text-gray-500 mt-1">Here is what is happening in your store today.</p>
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
+    
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex items-center gap-4">
+        <div class="w-12 h-12 bg-green-100 text-green-600 rounded-full flex items-center justify-center shrink-0">
+            <span class="material-symbols-outlined">payments</span>
+        </div>
         <div>
-            <h1 class="text-3xl font-bold text-gray-800">
-                <?= $is_super ? 'Mall Overview' : 'Vendor Dashboard' ?>
-            </h1>
-            <p class="text-gray-500">
-                Welcome, <span class="font-bold text-blue-600"><?= htmlspecialchars($_SESSION['admin_username']) ?></span>
-            </p>
+            <p class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Total Revenue</p>
+            <p class="text-2xl font-black text-gray-800">₦<?php echo number_format($stats['revenue'], 2); ?></p>
         </div>
-        <?php if(!$is_super): ?>
-            <span class="bg-blue-100 text-blue-700 px-4 py-2 rounded-full text-sm font-bold">
-                <?= htmlspecialchars($_SESSION['store_name'] ?? 'My Store') ?>
-            </span>
-        <?php endif; ?>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <div class="bg-white p-6 rounded-lg shadow border-l-4 border-green-500">
-            <h3 class="text-sm font-medium text-gray-500"><?= $is_super ? 'Total Mall Revenue' : 'My Sales' ?></h3>
-            <p class="text-3xl font-bold text-green-600">₦<?= number_format($stats['total_revenue'] ?? 0, 2) ?></p>
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex items-center gap-4">
+        <div class="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center shrink-0">
+            <span class="material-symbols-outlined">shopping_bag</span>
         </div>
-        
-        <div class="bg-white p-6 rounded-lg shadow border-l-4 border-blue-500">
-            <h3 class="text-sm font-medium text-gray-500"><?= $is_super ? 'Total Orders' : 'My Orders' ?></h3>
-            <p class="text-3xl font-bold text-gray-900"><?= $stats['total_orders'] ?? 0 ?></p>
+        <div>
+            <p class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Total Orders</p>
+            <p class="text-2xl font-black text-gray-800"><?php echo number_format($stats['orders']); ?></p>
         </div>
-        
-        <div class="bg-white p-6 rounded-lg shadow border-l-4 border-yellow-500">
-            <h3 class="text-sm font-medium text-gray-500">Active Products</h3>
-            <p class="text-3xl font-bold text-gray-900"><?= $stats['total_products'] ?? 0 ?></p>
-        </div>
-        
-        <?php if($is_super): ?>
-        <div class="bg-white p-6 rounded-lg shadow border-l-4 border-indigo-500">
-            <h3 class="text-sm font-medium text-gray-500">Registered Customers</h3>
-            <p class="text-3xl font-bold text-gray-900"><?= $stats['total_users'] ?? 0 ?></p>
-        </div>
-        <?php endif; ?>
     </div>
 
-    <div class="bg-white rounded-lg shadow overflow-hidden">
-        <div class="px-6 py-4 border-b border-gray-100">
-            <h3 class="font-bold text-gray-800">My Recent Activity</h3>
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex items-center gap-4">
+        <div class="w-12 h-12 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center shrink-0">
+            <span class="material-symbols-outlined">inventory_2</span>
         </div>
-        <table class="w-full text-left text-sm text-gray-600">
-            <tbody class="divide-y divide-gray-100">
-                <?php if (count($recent_activities) > 0): ?>
-                    <?php foreach ($recent_activities as $activity): ?>
-                    <tr class="hover:bg-gray-50">
-                        <td class="px-6 py-3 font-medium text-gray-800"><?= htmlspecialchars($activity['action']) ?></td>
-                        <td class="px-6 py-3"><?= htmlspecialchars($activity['details']) ?></td>
-                        <td class="px-6 py-3 text-right text-gray-400 text-xs"><?= date('M j, H:i', strtotime($activity['created_at'])) ?></td>
-                    </tr>
-                    <?php endforeach; ?>
-                <?php else: ?>
-                    <tr><td colspan="3" class="px-6 py-4 text-center text-gray-400">No recent activities found.</td></tr>
-                <?php endif; ?>
-            </tbody>
-        </table>
+        <div>
+            <p class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Active Products</p>
+            <p class="text-2xl font-black text-gray-800"><?php echo number_format($stats['products']); ?></p>
+        </div>
     </div>
+
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex items-center gap-4">
+        <div class="w-12 h-12 <?php echo $stats['low_stock'] > 0 ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-400'; ?> rounded-full flex items-center justify-center shrink-0">
+            <span class="material-symbols-outlined">warning</span>
+        </div>
+        <div>
+            <p class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Low Stock Items</p>
+            <p class="text-2xl font-black text-gray-800"><?php echo number_format($stats['low_stock']); ?></p>
+        </div>
+    </div>
+
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+        <h3 class="font-bold text-gray-800 mb-4 border-b pb-2">Quick Actions</h3>
+        <div class="grid grid-cols-2 gap-4">
+            <a href="admin_products.php" class="bg-gray-50 hover:bg-gray-100 border border-gray-200 p-4 rounded-lg flex flex-col items-center justify-center text-center transition">
+                <span class="material-symbols-outlined text-blue-500 mb-2">add_box</span>
+                <span class="text-sm font-bold text-gray-700">Add Product</span>
+            </a>
+            <a href="orders.php" class="bg-gray-50 hover:bg-gray-100 border border-gray-200 p-4 rounded-lg flex flex-col items-center justify-center text-center transition">
+                <span class="material-symbols-outlined text-green-500 mb-2">local_shipping</span>
+                <span class="text-sm font-bold text-gray-700">Fulfill Orders</span>
+            </a>
+            <a href="admin_profile.php" class="bg-gray-50 hover:bg-gray-100 border border-gray-200 p-4 rounded-lg flex flex-col items-center justify-center text-center transition">
+                <span class="material-symbols-outlined text-purple-500 mb-2">storefront</span>
+                <span class="text-sm font-bold text-gray-700">Store Profile</span>
+            </a>
+            <a href="../store.php?vendor_id=<?php echo $current_admin_id; ?>" target="_blank" class="bg-gray-50 hover:bg-gray-100 border border-gray-200 p-4 rounded-lg flex flex-col items-center justify-center text-center transition">
+                <span class="material-symbols-outlined text-gray-500 mb-2">visibility</span>
+                <span class="text-sm font-bold text-gray-700">View Live Store</span>
+            </a>
+        </div>
+    </div>
+</div>
 
 <?php echo "</main></div></body></html>"; ?>

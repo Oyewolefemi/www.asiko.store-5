@@ -6,9 +6,10 @@ session_start();
 require_once '../kiosk/config.php'; 
 require_once '../kiosk/functions.php';
 
-// Security Check - Only Super Admin
-if (!isset($_SESSION['admin_role']) || $_SESSION['admin_role'] !== 'superadmin') {
-    die("Access Denied. Only Super Admin can view the mailing dashboard.");
+// Security Check - Use HQ Master Vault Session
+if (!isset($_SESSION['master_admin_id'])) {
+    header("Location: ../hq/login.php?app=mailing");
+    exit;
 }
 
 // 1. Fetch Stats 
@@ -62,7 +63,7 @@ try {
 
 <header class="bg-white shadow-sm border-b px-6 py-4 flex justify-between items-center">
     <h1 class="font-bold text-xl text-gray-800">Asiko Mailing Center</h1>
-    <a href="../kiosk/Red/admin_dashboard.php" class="text-blue-600 hover:underline text-sm font-bold">← Back to Admin</a>
+    <a href="../hq/index.php" class="text-blue-600 hover:underline text-sm font-bold">← Back to Directory</a>
 </header>
 
 <div class="container mx-auto mt-8 px-4 pb-12 max-w-6xl">
@@ -73,7 +74,7 @@ try {
             <p class="text-gray-500 mt-1">Broadcast newsletters, manage audiences, and track campaigns.</p>
         </div>
         <div class="flex gap-3">
-            <a href="../kiosk/Red/admin_dashboard.php" class="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 font-bold py-2.5 px-5 rounded shadow-sm transition flex items-center gap-2">
+            <a href="../hq/index.php" class="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 font-bold py-2.5 px-5 rounded shadow-sm transition flex items-center gap-2">
                 <span class="material-symbols-outlined text-sm">arrow_back</span> Main Dashboard
             </a>
             <a href="compose.php" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 px-5 rounded shadow-lg transition flex items-center gap-2">

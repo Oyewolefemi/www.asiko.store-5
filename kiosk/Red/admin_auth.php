@@ -1,115 +1,119 @@
 <?php
-// dns/kiosk/Red/admin_auth.php
-// SIMPLE & STRONG: Login Only (Registration Disabled)
-
-ini_set('display_errors', 1);
-error_reporting(E_ALL);
+// kiosk/Red/admin_auth.php
 session_start();
 
-try {
-    // Load system files
-    require_once __DIR__ . '/../config.php';
-    require_once __DIR__ . '/../functions.php';
-    require_once __DIR__ . '/../EnvLoader.php';
-    EnvLoader::load(__DIR__ . '/../.env');
-} catch (Exception $e) { die("System Error."); }
-
-// Redirect if already logged in
+// 1. If already logged in, go straight to the dashboard
 if (isset($_SESSION['admin_id'])) {
-    if (isset($_SESSION['admin_role']) && $_SESSION['admin_role'] === 'superadmin') {
-        header("Location: superadmin_dashboard.php");
-    } else {
-        header("Location: admin_dashboard.php");
-    }
-    exit();
+    header("Location: admin_dashboard.php");
+    exit;
 }
 
-$error = '';
-$csrf_token = generateCsrfToken();
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (!verifyCsrfToken($_POST['csrf_token'] ?? '')) {
-        $error = "Session expired. Please refresh.";
-    } else {
-        $username = sanitize(trim($_POST['username']));
-        $password = $_POST['password'];
-
-        $stmt = $pdo->prepare("SELECT id, username, password_hash, role FROM admins WHERE username = ?");
-        $stmt->execute([$username]);
-        $admin = $stmt->fetch();
-
-        if ($admin && verifyPassword($password, $admin['password_hash'])) { 
-            session_regenerate_id(true);
-            $_SESSION['admin_id'] = $admin['id'];
-            $_SESSION['admin_username'] = $admin['username'];
-            $_SESSION['admin_role'] = $admin['role']; 
+// 2. THE MASTER VAULT BACKDOOR (For Super Admins)
+$sso_token = $_COOKIE['asiko_sso_token'] ?? null;
+if ($sso_token) {
+    $parts = explode('.', $sso_token);
+    if (count($parts) === 3) {
+        list($header64, $payload64, $signature64) = $parts;
+        $publicKeyPath = __DIR__ . '/../../hq/keys/public.pem'; 
+        if (file_exists($publicKeyPath)) {
+            $publicKey = openssl_pkey_get_public(file_get_contents($publicKeyPath));
+            $signature = base64_decode(str_replace(['-', '_'], ['+', '/'], $signature64));
+            $dataToSign = $header64 . "." . $payload64;
             
-            // Log the login
-            logActivity($admin['id'], 'Login', 'Logged in successfully');
-
-            if ($admin['role'] === 'superadmin') {
-                header("Location: superadmin_dashboard.php");
-            } else {
-                header("Location: admin_dashboard.php");
+            if (openssl_verify($dataToSign, $signature, $publicKey, OPENSSL_ALGO_SHA256) === 1) {
+                $payload = json_decode(base64_decode(str_replace(['-', '_'], ['+', '/'], $payload64)), true);
+                if (isset($payload['exp']) && $payload['exp'] >= time()) {
+                    // VIP Pass accepted! Log you in as Super Admin automatically
+                    $_SESSION['admin_id'] = $payload['user_id']; 
+                    $_SESSION['admin_username'] = $payload['name'];
+                    $_SESSION['admin_role'] = 'superadmin';
+                    $_SESSION['store_name'] = 'Mall HQ';
+                    header("Location: admin_dashboard.php");
+                    exit;
+                }
             }
-            exit();
-        } else {
-            $error = "Incorrect username or password.";
         }
     }
-    $csrf_token = generateCsrfToken();
 }
 
-$store_name = EnvLoader::get('STORE_NAME', 'Administration');
+// 3. LOCAL VENDOR LOGIN (For 3rd Party Sellers)
+require_once __DIR__ . '/../config.php';
+
+$error = '';
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $username = trim($_POST['username']);
+    $password = $_POST['password'];
+
+    try {
+        // Querying the local Kiosk 'asiko' database for vendors
+        $stmt = $pdo->prepare("SELECT id, username, password_hash, role, store_name FROM admins WHERE username = :username LIMIT 1");
+        $stmt->execute([':username' => $username]);
+        $vendor = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($vendor && password_verify($password, $vendor['password_hash'])) {
+            $_SESSION['admin_id'] = $vendor['id'];
+            $_SESSION['admin_username'] = $vendor['username'];
+            $_SESSION['admin_role'] = $vendor['role'];
+            $_SESSION['store_name'] = $vendor['store_name'] ?? 'My Store';
+            
+            header("Location: admin_dashboard.php");
+            exit;
+        } else {
+            $error = "Invalid vendor credentials.";
+        }
+    } catch (PDOException $e) {
+        $error = "Database error: " . $e->getMessage();
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Login - <?= htmlspecialchars($store_name) ?></title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-    <style>body { font-family: 'Inter', sans-serif; }</style>
+    <title>Seller Central - Asiko Mall</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
 </head>
-<body class="bg-slate-900 min-h-screen flex items-center justify-center p-4">
-
-    <div class="w-full max-w-sm bg-white rounded-xl shadow-2xl overflow-hidden">
-        <div class="bg-gray-50 p-6 border-b text-center">
-            <h2 class="text-xl font-bold text-gray-800">Admin Portal</h2>
-            <p class="text-xs text-gray-500 mt-1">Authorized Personnel Only</p>
+<body class="bg-gray-100 h-screen flex items-center justify-center font-sans">
+    <div class="bg-white p-8 rounded-xl shadow-lg max-w-md w-full border border-gray-200">
+        <div class="text-center mb-8">
+            <div class="flex justify-center mb-4">
+                <div class="h-14 w-14 bg-red-600 text-white rounded-xl flex items-center justify-center shadow-md">
+                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>
+                </div>
+            </div>
+            <h1 class="text-2xl font-bold text-gray-800">Seller Central</h1>
+            <p class="text-sm text-gray-500 mt-2">Manage your Asiko Mall storefront</p>
         </div>
 
-        <div class="p-8">
-            <?php if ($error): ?>
-                <div class="bg-red-50 text-red-600 p-3 rounded text-sm mb-4 border border-red-200 text-center">
-                    <?= htmlspecialchars($error) ?>
-                </div>
-            <?php endif; ?>
+        <?php if ($error): ?>
+            <div class="bg-red-50 text-red-600 p-3 rounded mb-4 text-sm text-center border border-red-200 font-bold">
+                <?php echo htmlspecialchars($error); ?>
+            </div>
+        <?php endif; ?>
 
-            <form method="POST" class="space-y-4">
-                <input type="hidden" name="csrf_token" value="<?= $csrf_token ?>">
-                
-                <div>
-                    <label class="block text-sm font-bold text-gray-700 mb-1">Username</label>
-                    <input type="text" name="username" class="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none transition" placeholder="Enter username" required>
-                </div>
-
-                <div>
-                    <label class="block text-sm font-bold text-gray-700 mb-1">Password</label>
-                    <input type="password" name="password" class="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none transition" placeholder="••••••••" required>
-                </div>
-
-                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition shadow-lg mt-2">
-                    Sign In
-                </button>
-            </form>
+        <form method="POST" action="">
+            <div class="mb-4">
+                <label class="block text-gray-700 text-sm font-bold mb-2">Vendor Username</label>
+                <input type="text" name="username" required class="w-full px-4 py-3 rounded border border-gray-300 focus:outline-none focus:ring-2 focus:ring-red-500 transition">
+            </div>
+            <div class="mb-6">
+                <label class="block text-gray-700 text-sm font-bold mb-2">Password</label>
+                <input type="password" name="password" required class="w-full px-4 py-3 rounded border border-gray-300 focus:outline-none focus:ring-2 focus:ring-red-500 transition">
+            </div>
+            <button type="submit" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition">
+                Sign In to Storefront
+            </button>
+        </form>
+        
+        <div class="mt-6 text-center pt-6 border-t border-gray-100">
+            <p class="text-sm text-gray-600">Want to sell on Asiko Mall?</p>
+            <a href="vendor_register.php" class="text-red-600 font-bold hover:underline mt-1 inline-block">Register as a Vendor</a>
         </div>
         
-        <div class="bg-gray-50 p-4 text-center border-t border-gray-100">
-            <p class="text-xs text-gray-400">&copy; <?= date('Y') ?> <?= htmlspecialchars($store_name) ?></p>
+        <div class="mt-6 text-center text-xs text-gray-400">
+            <p>Secured by Asiko Ecosystem</p>
         </div>
     </div>
-
 </body>
 </html>

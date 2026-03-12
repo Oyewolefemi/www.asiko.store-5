@@ -4,14 +4,40 @@ session_start();
 
 // 1. ISOLATED MAILING SYSTEM INCLUDES
 require_once 'db.php'; 
+require_once 'event_mappings.php'; // NEW: Includes the router logic
 
-// Security Check - Only Super Admin
-if (!isset($_SESSION['admin_role']) || $_SESSION['admin_role'] !== 'superadmin') {
-    die("Access Denied. Only Super Admin can manage mailing settings.");
+// Security Check - Use HQ Master Vault Session
+if (!isset($_SESSION['master_admin_id'])) {
+    header("Location: ../hq/login.php?app=mailing/settings.php");
+    exit;
 }
 
 $msg = '';
 $tab = $_GET['tab'] ?? 'triggers'; 
+
+// --- NEW: HANDLE ROUTING RULES SUBMISSION ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'add_mapping') {
+    $app = trim($_POST['app_name']);
+    $event = trim($_POST['event_name']);
+    $template = trim($_POST['template_file']);
+
+    if (!empty($app) && !empty($event) && !empty($template)) {
+        if (add_mapping($pdo, $app, $event, $template)) {
+            $msg = "Routing rule saved successfully!";
+        } else {
+            $msg = "Failed to save the routing rule.";
+        }
+    } else {
+        $msg = "All fields are required to create a rule.";
+    }
+}
+
+if (isset($_GET['delete_mapping_id'])) {
+    $id = (int)$_GET['delete_mapping_id'];
+    if (delete_mapping($pdo, $id)) {
+        $msg = "Routing rule deleted.";
+    }
+}
 
 // --- HANDLE SMTP FORM SUBMISSION ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_mail_settings'])) {
@@ -66,7 +92,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_template'])) {
 
     $upload_fields = ['email_bg_image', 'email_header_img', 'email_footer_img'];
     
-    // UPDATED: Save assets directly inside the isolated mailing folder
+    // Save assets directly inside the isolated mailing folder
     $target_dir = __DIR__ . "/uploads/mail_assets/";
     if (!is_dir($target_dir)) mkdir($target_dir, 0777, true);
 
@@ -165,6 +191,10 @@ if ($active_tid !== 'new') {
     }
 }
 
+// Fetch router mappings
+$mappings = get_all_mappings($pdo);
+$html_files = get_available_templates();
+
 if(isset($_GET['msg'])) $msg = $_GET['msg'];
 ?>
 <!DOCTYPE html>
@@ -199,7 +229,7 @@ if(isset($_GET['msg'])) $msg = $_GET['msg'];
 
 <header class="bg-white shadow-sm border-b px-6 py-4 flex justify-between items-center">
     <h1 class="font-bold text-xl text-gray-800">Mailing Microservice</h1>
-    <a href="../kiosk/Red/admin_dashboard.php" class="text-blue-600 hover:underline text-sm font-bold">← Back to Ecosystem</a>
+    <a href="../hq/index.php" class="text-blue-600 hover:underline text-sm font-bold">← Back to Directory</a>
 </header>
 
 <div class="container mx-auto mt-8 px-4 pb-12 max-w-7xl">
@@ -229,6 +259,7 @@ if(isset($_GET['msg'])) $msg = $_GET['msg'];
         </a>
         <a href="?tab=triggers" class="px-6 py-4 font-bold text-sm whitespace-nowrap <?php echo $tab=='triggers' ? 'border-b-2 border-green-600 text-green-600' : 'text-gray-500 hover:text-gray-800'; ?>">Trigger Events</a>
         <a href="?tab=design" class="px-6 py-4 font-bold text-sm whitespace-nowrap <?php echo $tab=='design' ? 'border-b-2 border-green-600 text-green-600' : 'text-gray-500 hover:text-gray-800'; ?>">Template Builder</a>
+        <a href="?tab=router" class="px-6 py-4 font-bold text-sm whitespace-nowrap <?php echo $tab=='router' ? 'border-b-2 border-green-600 text-green-600' : 'text-gray-500 hover:text-gray-800'; ?>">Template Router</a>
         <a href="?tab=smtp" class="px-6 py-4 font-bold text-sm whitespace-nowrap <?php echo $tab=='smtp' ? 'border-b-2 border-green-600 text-green-600' : 'text-gray-500 hover:text-gray-800'; ?>">SMTP Configuration</a>
     </div>
 
@@ -632,6 +663,90 @@ if(isset($_GET['msg'])) $msg = $_GET['msg'];
             </script>
         </form>
     <?php endif; ?>
+
+    <?php if ($tab == 'router'): ?>
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div class="lg:col-span-1">
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                    <h3 class="font-bold text-gray-800 mb-4 border-b pb-2">Create New Rule</h3>
+                    <form method="POST" class="space-y-4">
+                        <input type="hidden" name="action" value="add_mapping">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Target App</label>
+                            <select name="app_name" required class="w-full border border-gray-300 p-2 rounded outline-none focus:ring-2 focus:ring-green-500 bg-gray-50">
+                                <option value="scrummy">Scrummy Nummy</option>
+                                <option value="cakes">Cakes & More</option>
+                                <option value="kiosk">Asiko Kiosk</option>
+                                <option value="hq">Master Vault (HQ)</option>
+                                <option value="*">Any App (Fallback)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Event Trigger</label>
+                            <input list="event_names" name="event_name" required placeholder="e.g. order.placed" class="w-full border border-gray-300 p-2 rounded outline-none focus:ring-2 focus:ring-green-500">
+                            <datalist id="event_names">
+                                <option value="order.placed">
+                                <option value="order.status_changed">
+                            </datalist>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">HTML Template</label>
+                            <?php if(empty($html_files)): ?>
+                                <div class="text-xs text-red-500 font-bold p-2 bg-red-50 rounded">No .html files found in /templates/</div>
+                            <?php else: ?>
+                                <select name="template_file" required class="w-full border border-gray-300 p-2 rounded outline-none focus:ring-2 focus:ring-green-500 bg-gray-50">
+                                    <option value="">-- Select Template --</option>
+                                    <?php foreach($html_files as $tpl): ?>
+                                        <option value="<?php echo htmlspecialchars($tpl); ?>"><?php echo htmlspecialchars($tpl); ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            <?php endif; ?>
+                        </div>
+                        <button type="submit" class="w-full bg-gray-900 hover:bg-black text-white font-bold py-3 rounded shadow transition">
+                            Save Rule
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="lg:col-span-2">
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div class="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+                        <h3 class="font-bold text-gray-800">Active Routing Rules</h3>
+                    </div>
+                    <?php if (empty($mappings)): ?>
+                        <div class="p-8 text-center text-gray-400">No template rules configured yet.</div>
+                    <?php else: ?>
+                        <table class="w-full text-left">
+                            <thead class="bg-white text-xs font-bold text-gray-500 uppercase border-b border-gray-100">
+                                <tr>
+                                    <th class="p-4">App Source</th>
+                                    <th class="p-4">Trigger Event</th>
+                                    <th class="p-4">Template File</th>
+                                    <th class="p-4 text-right">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-50 text-sm text-gray-700">
+                                <?php foreach($mappings as $map): ?>
+                                <tr class="hover:bg-gray-50 transition">
+                                    <td class="p-4 font-bold uppercase tracking-wider text-[10px]"><?php echo htmlspecialchars($map['app_name']); ?></td>
+                                    <td class="p-4 font-mono text-gray-600 bg-gray-50 rounded inline-block mt-2 ml-2"><?php echo htmlspecialchars($map['event_name']); ?></td>
+                                    <td class="p-4"><?php echo htmlspecialchars($map['template_file']); ?></td>
+                                    <td class="p-4 text-right">
+                                        <a href="?tab=router&delete_mapping_id=<?php echo $map['id']; ?>" onclick="return confirm('Remove this rule?')" class="text-red-400 hover:text-red-600">
+                                            <span class="material-symbols-outlined">delete</span>
+                                        </a>
+                                    </td>
+                                </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    <?php endif; ?>
+
 </div>
 </body>
 </html>

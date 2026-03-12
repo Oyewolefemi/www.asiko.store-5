@@ -1,6 +1,5 @@
 <?php 
 require_once 'config.php';
-// REMOVED: requireLogin(); -> Open to guests
 
 $bankDetails = getBankDetails();
 $orderSuccess = false;
@@ -13,36 +12,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $paymentMethod = $_POST['payment_method'];
     $cartData = json_decode($cartJson, true);
 
-    // Guest Handling
     $userId = $_SESSION['user_id'] ?? null;
     $guestName = trim($_POST['guest_name'] ?? '');
     $guestEmail = trim($_POST['guest_email'] ?? '');
     $guestPhone = trim($_POST['guest_phone'] ?? '');
 
     if ($cartData && !empty($address)) {
-        // Validate Guest Info if not logged in
         if (!$userId && (empty($guestName) || empty($guestPhone))) {
             $error = "Please provide your name and phone number.";
         } else {
             
             // --- SECURITY: SERVER-SIDE PRICE VALIDATION ---
-            // Extract all requested product IDs from the client's cart
             $productIds = array_map(function($item) { return (int)$item['id']; }, $cartData);
             
             if (!empty($productIds)) {
-                // Prepare a dynamic IN clause based on the number of items
                 $placeholders = str_repeat('?,', count($productIds) - 1) . '?';
                 
-                // Fetch the actual prices directly from the database
                 $stmt = $pdo->prepare("SELECT id, price, sale_price, is_active FROM products WHERE id IN ($placeholders)");
                 $stmt->execute($productIds);
                 $dbProducts = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-                // Create a secure lookup array [product_id => true_price]
                 $securePrices = [];
                 foreach ($dbProducts as $dbP) {
                     if ($dbP['is_active']) {
-                        // Use sale price if it exists and is greater than 0, otherwise standard price
                         $securePrices[$dbP['id']] = ($dbP['sale_price'] > 0) ? $dbP['sale_price'] : $dbP['price'];
                     }
                 }
@@ -50,13 +42,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $serverCalculatedTotal = 0;
                 $validatedCart = [];
 
-                // Rebuild the cart securely using database prices
                 foreach ($cartData as $item) {
                     $pid = (int)$item['id'];
                     
-                    // Check if the item actually exists and is active in the database
                     if (isset($securePrices[$pid])) {
-                        $qty = max(1, (int)$item['quantity']); // Prevent negative or zero quantities
+                        $qty = max(1, (int)$item['quantity']); 
                         $truePrice = $securePrices[$pid];
                         
                         $serverCalculatedTotal += ($truePrice * $qty);
@@ -65,15 +55,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             'id' => $pid,
                             'quantity' => $qty,
                             'price_at_time' => $truePrice,
-                            'notes' => htmlspecialchars($item['notes'] ?? '', ENT_QUOTES, 'UTF-8') // Sanitize notes
+                            'notes' => htmlspecialchars($item['notes'] ?? '', ENT_QUOTES, 'UTF-8') 
                         ];
                     } else {
                         $error = "One or more items in your cart are invalid or no longer available.";
-                        break; // Halt processing
+                        break; 
                     }
                 }
 
-                // Proceed only if there are no errors and the total is valid
                 if (!isset($error) && $serverCalculatedTotal > 0) {
                     
                     $status = ($paymentMethod === 'transfer') ? 'pending_verification' : 'pending';
@@ -81,12 +70,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     try {
                         $pdo->beginTransaction();
 
-                        // Insert Order using the SERVER calculated total
                         $stmt = $pdo->prepare("INSERT INTO orders (user_id, guest_name, guest_email, guest_phone, total_amount, delivery_address, payment_method, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())");
                         $stmt->execute([$userId, $guestName, $guestEmail, $guestPhone, $serverCalculatedTotal, $address, $paymentMethod, $status]);
                         $newOrderId = $pdo->lastInsertId();
 
-                        // Insert Items using the SERVER validated prices
                         $itemStmt = $pdo->prepare("INSERT INTO order_items (order_id, product_id, quantity, price_at_time, notes) VALUES (?, ?, ?, ?, ?)");
                         foreach ($validatedCart as $vItem) {
                             $itemStmt->execute([$newOrderId, $vItem['id'], $vItem['quantity'], $vItem['price_at_time'], $vItem['notes']]);
@@ -94,7 +81,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         
                         $pdo->commit();
 
-                        // Set Success Flags for the Popup
+                        // --- NEW: FIRE MAILING EVENT TO THE QUEUE ---
+                        $customerEmail = $userId ? ($_SESSION['user_email'] ?? $guestEmail) : $guestEmail;
+                        if (!empty($customerEmail)) {
+                            fire_mail_event('order.placed', [
+                                'customer_email' => $customerEmail,
+                                'customer_name'  => $userId ? ($_SESSION['user_name'] ?? $guestName) : $guestName,
+                                'order_id'       => $newOrderId,
+                                'order_number'   => str_pad($newOrderId, 6, '0', STR_PAD_LEFT),
+                                'total_amount'   => '₦' . number_format($serverCalculatedTotal, 2),
+                                'site_name'      => $settings['site_name'] ?? 'DML Cakes'
+                            ], 'cakes');
+                        }
+
                         $orderSuccess = true;
                         $redirectUrl = $userId ? 'orders.php?new_order=1' : 'menu.php?guest_success=1';
 
@@ -115,7 +114,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <title>Checkout - <?= htmlspecialchars($settings['site_name'] ?? 'Scrummy') ?></title>
+    <title>Checkout - <?= htmlspecialchars($settings['site_name'] ?? 'DML Cakes') ?></title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;600;700&family=Material+Symbols+Outlined" rel="stylesheet"/>
@@ -265,7 +264,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     <script src="assets/js/app.js"></script>
     <script>
-        // Update the visual total on page load so the user sees their cart total safely
         document.addEventListener('DOMContentLoaded', () => {
             const data = localStorage.getItem('scrummy_cart');
             if (data) {
@@ -298,7 +296,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         function finishOrder(url) {
-            // Clear cart from LocalStorage securely before redirecting
             localStorage.removeItem('scrummy_cart');
             window.location.href = url;
         }
