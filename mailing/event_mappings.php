@@ -15,8 +15,7 @@ try {
         UNIQUE KEY unique_mapping (app_name, event_name)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
 } catch (PDOException $e) {
-    error_log('Failed to initialize event_mappings table: ' . $e->getMessage());
-    die('Mailing service initialization failed.');
+    die("Failed to initialize event_mappings table: " . $e->getMessage());
 }
 
 // ==========================================================

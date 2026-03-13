@@ -13,19 +13,12 @@ $apps = getConfiguredApps();
 // Function to peek into an app's database and fetch stats
 function fetchAppStats($app) {
     $stats = ['orders' => 0, 'revenue' => 0, 'users' => 0, 'status' => 'Online', 'error' => ''];
-    $db = getDbCredentialsForAppId($app['app_id']);
-
-    if (empty($db['name']) || empty($db['user'])) {
-        $stats['status'] = 'Offline';
-        $stats['error'] = 'Missing environment credentials.';
-        return $stats;
-    }
-
+    
     try {
         $pdo = new PDO(
-            "mysql:host={$db['host']};dbname={$db['name']};charset=utf8mb4",
-            $db['user'],
-            $db['pass']
+            "mysql:host={$app['db_host']};dbname={$app['db_name']};charset=utf8mb4", 
+            $app['db_user'], 
+            $app['db_pass']
         );
         $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         
@@ -171,12 +164,9 @@ function fetchAppStats($app) {
                             </div>
 
                             <div class="p-5 border-t border-gray-100 bg-white grid grid-cols-2 gap-3">
-                                <form method="POST" class="w-full">
-                                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['hq_csrf_token']) ?>">
-                                    <button type="submit" name="switch_app" value="<?= htmlspecialchars($id) ?>" class="w-full text-center py-2.5 px-3 border border-gray-300 text-gray-600 font-bold text-xs rounded hover:bg-gray-50 transition">
-                                        Set Active
-                                    </button>
-                                </form>
+                                <a href="app_manager.php" class="text-center py-2.5 px-3 border border-gray-300 text-gray-600 font-bold text-xs rounded hover:bg-gray-50 transition">
+                                    Edit Setup
+                                </a>
                                 <a href="<?= htmlspecialchars($app['folder_path']) ?>" class="text-center py-2.5 px-3 bg-blue-600 text-white font-bold text-xs rounded hover:bg-blue-700 transition flex items-center justify-center gap-1 shadow-sm">
                                     Open Dashboard <span class="material-symbols-outlined text-xs">open_in_new</span>
                                 </a>

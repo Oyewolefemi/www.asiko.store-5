@@ -3,24 +3,30 @@
         "app_id": "asiko",
         "app_name": "Mall",
         "app_type": "kiosk",
-        "folder_path": "/kiosk/Red/superadmin_dashboard.php",
+        "folder_path": "\/kiosk\/Red\/superadmin_dashboard.php",
         "db_host": "127.0.0.1",
-        "db_name": "asiko"
+        "db_name": "asiko",
+        "db_user": "levi",
+        "db_pass": "Blueradish@8"
     },
     "scrummy": {
         "app_id": "scrummy",
         "app_name": "scrummy",
         "app_type": "scrummy",
-        "folder_path": "/scrummy/admin/",
+        "folder_path": "\/scrummy\/admin\/",
         "db_host": "127.0.0.1",
-        "db_name": "scrummy"
+        "db_name": "scrummy",
+        "db_user": "scrumm",
+        "db_pass": "X1hkrr72QzXMADt1o3CK"
     },
     "dmlca": {
         "app_id": "dmlca",
         "app_name": "dmlcakes",
         "app_type": "scrummy",
-        "folder_path": "/cakes/admin/",
+        "folder_path": "\/cakes\/admin\/",
         "db_host": "127.0.0.1",
-        "db_name": "dmlcakes"
+        "db_name": "dmlcakes",
+        "db_user": "dmlc",
+        "db_pass": "Blueradish@8"
     }
 }

@@ -38,8 +38,7 @@ $options = [
 try {
     $pdo = new PDO($dsn, $user, $pass, $options);
 } catch (\PDOException $e) {
-    error_log('Kiosk database connection failed: ' . $e->getMessage());
-    die('System unavailable. Please try again later.');
+    die("Database connection failed: " . $e->getMessage());
 } 
 
 // ============================================================

@@ -25,7 +25,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'app_type' => $_POST['app_type'], 
                 'folder_path' => trim($_POST['folder_path']), // e.g., 'Red' or '../scrummy/admin'
                 'db_host' => trim($_POST['db_host']),
-                'db_name' => trim($_POST['db_name'])
+                'db_name' => trim($_POST['db_name']),
+                'db_user' => trim($_POST['db_user']),
+                'db_pass' => $_POST['db_pass']
             ];
             
             // Save back to JSON
@@ -130,7 +132,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                             <hr class="my-4 border-gray-100">
                             <h4 class="text-xs font-bold text-gray-800 uppercase flex items-center gap-1">
-                                <span class="material-symbols-outlined text-sm">database</span> DB Mapping (Live stats use root .env credentials)
+                                <span class="material-symbols-outlined text-sm">database</span> DB Credentials (For Live Stats)
                             </h4>
                             
                             <div>
@@ -140,6 +142,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <div>
                                 <label class="text-[10px] font-bold text-gray-500 uppercase">DB Name</label>
                                 <input type="text" name="db_name" required placeholder="asiko" class="w-full border p-2 rounded bg-gray-50 text-sm">
+                            </div>
+                            <div class="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label class="text-[10px] font-bold text-gray-500 uppercase">DB User</label>
+                                    <input type="text" name="db_user" required placeholder="root" class="w-full border p-2 rounded bg-gray-50 text-sm">
+                                </div>
+                                <div>
+                                    <label class="text-[10px] font-bold text-gray-500 uppercase">DB Pass</label>
+                                    <input type="password" name="db_pass" class="w-full border p-2 rounded bg-gray-50 text-sm">
+                                </div>
                             </div>
                         </div>
 

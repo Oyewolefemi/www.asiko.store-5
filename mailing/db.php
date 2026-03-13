@@ -14,7 +14,6 @@ try {
     $pdo_asiko->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
 } catch (PDOException $e) {
-    error_log('Mailing database connection failed: ' . $e->getMessage());
-    die('Mailing service unavailable.');
+    die("Mailing Database connection failed: " . $e->getMessage());
 }
 ?>
